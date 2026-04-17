@@ -5,7 +5,7 @@ A read-only Python CLI tool for reporting on Tado smart heating system status.
 ## Features
 
 - Battery status report for all devices
-- Zone controller map — which devices directly fire the boiler
+- Zone controller map — which heating zones fire the boiler vs operate passively
 - Home info and device counts
 - OAuth2 authentication with automatic token refresh
 
@@ -14,7 +14,7 @@ A read-only Python CLI tool for reporting on Tado smart heating system status.
 ```bash
 uv run python tado.py auth        # Authenticate (opens browser)
 uv run python tado.py battery     # Battery status report
-uv run python tado.py zones       # Zone controller vs TRV table
+uv run python tado.py zones       # Which zones fire the boiler vs operate passively
 uv run python tado.py status      # Home info and device counts
 ```
 

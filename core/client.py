@@ -92,6 +92,10 @@ class TadoClient:
         """Fetch the current state of a zone."""
         return self._request("GET", f"/homes/{self.home_id}/zones/{zone_id}/state")
 
+    def get_zone_control(self, zone_id: int) -> dict | None:
+        """Fetch the control configuration for a zone (includes heatingCircuit assignment)."""
+        return self._request("GET", f"/homes/{self.home_id}/zones/{zone_id}/control")
+
     def get_home(self) -> dict | None:
         """Fetch home details."""
         return self._request("GET", f"/homes/{self.home_id}")

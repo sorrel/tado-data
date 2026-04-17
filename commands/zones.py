@@ -21,16 +21,20 @@ def zones_command():
 
     rows = []
     for zone in zones:
+        if zone.get("type") != "HEATING":
+            continue
+        zone_id = zone["id"]
         zone_name = zone.get("name", "Unknown")
+        control = client.get_zone_control(zone_id)
+        fires_boiler = bool(control and control.get("heatingCircuit") is not None)
         for device in zone.get("devices", []):
             serial = device.get("shortSerialNo", device.get("serialNo", ""))
             device_type = device.get("deviceType", "Unknown")
-            duties = device.get("duties", [])
             rows.append({
                 "zone": zone_name,
                 "serial": serial,
                 "type": device_type,
-                "fires_boiler": "ZONE_LEADER" in duties,
+                "fires_boiler": fires_boiler,
             })
 
     if not rows:
@@ -72,6 +76,6 @@ def zones_command():
     click.echo()
     click.echo(
         f"  {total} device{'s' if total != 1 else ''}, "
-        f"{controller_count} zone controller{'s' if controller_count != 1 else ''}"
+        f"{controller_count} fire{'s' if controller_count == 1 else ''} boiler"
     )
     click.echo()

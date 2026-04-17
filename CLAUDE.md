@@ -52,6 +52,14 @@ OAuth2 Device Code Grant flow (required by Tado since March 2025):
 - Present on battery-powered devices only (thermostats, radiator valves)
 - Absent on mains-powered devices (gateway, boiler unit)
 
+### Zone Control & Heating Circuits
+
+- `GET /homes/{homeId}/zones` — zone list with devices and their `duties` arrays
+- `GET /homes/{homeId}/zones/{zoneId}/control` — zone control config; the key field is `heatingCircuit`
+- `heatingCircuit: <number>` → zone is connected to a heating circuit and fires the boiler when calling for heat
+- `heatingCircuit: null` → zone has no circuit assigned; the valve opens but cannot fire the boiler independently
+- Zone type `HOT_WATER` is excluded from the zones command (heating zones only)
+
 ### Device Types
 
 | Type | Description |
