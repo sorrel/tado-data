@@ -3,8 +3,10 @@ Battery reporting command.
 """
 
 import click
+from datetime import date
 
 from core.client import TadoClient
+from core.storage import update_battery_history
 
 
 def _get_device_zone_map(client: TadoClient) -> dict:
@@ -58,6 +60,7 @@ def battery_command(room):
             continue
 
         battery_devices.append({
+            "serial": serial,
             "name": device.get("shortSerialNo", serial),
             "type": device.get("deviceType", "Unknown"),
             "zone": zone_name,
@@ -69,6 +72,16 @@ def battery_command(room):
     if not battery_devices:
         click.echo("No battery-powered devices found.")
         return
+
+    # Update persistent history and get 'since' dates
+    current_states = {d["serial"]: d["battery"] for d in battery_devices}
+    history = update_battery_history(current_states)
+    today = date.today().isoformat()
+
+    for d in battery_devices:
+        entry = history.get(d["serial"], {})
+        since = entry.get("since", today)
+        d["since"] = since
 
     # Sort by zone, then device type
     battery_devices.sort(key=lambda d: (d["zone"], d["type"], d["name"]))
@@ -84,6 +97,7 @@ def battery_command(room):
         f"{'Type':<{type_width}}  "
         f"{'Serial':<{name_width}}  "
         f"{'Battery':>8}  "
+        f"{'Since':<10}  "
         f"{'Connected':>9}"
     )
     click.echo()
@@ -100,6 +114,13 @@ def battery_command(room):
         else:
             battery_str = click.style(f"{'Normal':>8}", fg="green")
 
+        # Format 'since' date — dim if first seen today (no history yet)
+        since = d["since"]
+        if since == today:
+            since_str = click.style(f"{since:<10}", fg="bright_black")
+        else:
+            since_str = f"{since:<10}"
+
         # Colour connection status
         connected = d["connection"]
         if connected:
@@ -112,6 +133,7 @@ def battery_command(room):
             f"{d['type']:<{type_width}}  "
             f"{d['name']:<{name_width}}  "
             f"{battery_str}  "
+            f"{since_str}  "
             f"{conn_str}"
         )
 
