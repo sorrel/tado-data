@@ -2,6 +2,8 @@
 Setup and authentication commands.
 """
 
+import textwrap
+
 import click
 
 from core.auth import device_code_flow, clear_tokens, load_tokens
@@ -21,10 +23,20 @@ class ColouredGroup(click.Group):
             commands.append((subcommand, help_text))
 
         if commands:
+            col_width = max(len(name) for name, _ in commands) + 2
+            # write_text adds current_indent (2) + our "  " prefix = 4 spaces before name
+            help_col = 4 + col_width
+            help_indent = " " * help_col
+            available = max(formatter.width - help_col, 20)
             with formatter.section("Commands"):
                 for name, help_text in commands:
+                    padding = " " * (col_width - len(name))
                     name_str = click.style(name, fg="cyan")
-                    formatter.write_text(f"  {name_str:30s} {help_text}")
+                    lines = textwrap.wrap(help_text, width=available)
+                    first = lines[0] if lines else ""
+                    rest = ("\n" + help_indent).join(lines[1:])
+                    full = (first + "\n" + help_indent + rest) if rest else first
+                    formatter.write(f"    {name_str}{padding}{full}\n")
 
 
 @click.command("auth")
