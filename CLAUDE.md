@@ -77,7 +77,7 @@ OAuth2 Device Code Grant flow (required by Tado since March 2025):
 
 ## Git Workflow
 
-**Never commit directly to the master branch.** Always use feature branches.
+Single-person project — commit directly to `main`. No feature branches needed.
 
 ## Design Decisions
 
