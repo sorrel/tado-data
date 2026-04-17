@@ -25,15 +25,31 @@ def _save_json(path: str, data: dict) -> None:
         json.dump(data, f, indent=2)
 
 
+def _migrate_entry(entry: dict) -> dict:
+    """Migrate old {state, since} format to {good_since, low_since}."""
+    if "state" in entry:
+        state = entry["state"]
+        since = entry.get("since")
+        if state == "NORMAL":
+            return {"good_since": since, "low_since": None}
+        else:
+            return {"good_since": None, "low_since": since}
+    return entry
+
+
 def load_battery_history() -> dict:
     """Return stored battery state history keyed by device serial number."""
-    return _load_json(BATTERY_HISTORY_FILE).get("devices", {})
+    raw = _load_json(BATTERY_HISTORY_FILE).get("devices", {})
+    return {serial: _migrate_entry(entry) for serial, entry in raw.items()}
 
 
 def update_battery_history(current_states: dict[str, str]) -> dict:
     """
-    Compare current battery states against stored history.
-    Records a new 'since' date whenever a device's state changes.
+    Update battery history with current states.
+
+    Tracks good_since (last time battery became NORMAL) and
+    low_since (when it went LOW) independently, so neither is
+    lost when the state changes.
 
     current_states: {serial: "NORMAL" | "LOW"}
     Returns updated history dict.
@@ -43,9 +59,25 @@ def update_battery_history(current_states: dict[str, str]) -> dict:
     changed = False
 
     for serial, state in current_states.items():
-        entry = history.get(serial)
-        if entry is None or entry.get("state") != state:
-            history[serial] = {"state": state, "since": today}
+        entry = history.get(serial, {})
+        prev_good = entry.get("good_since")
+        prev_low = entry.get("low_since")
+
+        if state == "NORMAL":
+            # Went from LOW → NORMAL (or first time seen as NORMAL)
+            new_good = prev_good if prev_good else today
+            new_low = None
+        else:
+            # Went from NORMAL → LOW (or first time seen as LOW)
+            new_good = prev_good  # preserve — this is how long the battery lasted
+            new_low = prev_low if prev_low else today
+
+        new_entry = {"good_since": new_good, "low_since": new_low}
+        if new_entry != entry:
+            history[serial] = new_entry
+            changed = True
+        elif serial not in history:
+            history[serial] = new_entry
             changed = True
 
     if changed:

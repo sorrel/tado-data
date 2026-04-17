@@ -11,9 +11,10 @@ from core.storage import update_battery_history
 
 def _get_device_zone_map(client: TadoClient) -> dict:
     """
-    Build a mapping of device serial number to zone name.
+    Build a mapping of device serial number to zone name and controller status.
 
-    Returns dict of {serial_no: zone_name}.
+    Returns dict of {serial_no: {"zone": zone_name, "is_controller": bool}}.
+    A device with ZONE_LEADER duty is the zone controller that fires the boiler.
     """
     zones = client.get_zones()
     if not zones:
@@ -25,7 +26,11 @@ def _get_device_zone_map(client: TadoClient) -> dict:
         for device in zone.get("devices", []):
             serial = device.get("serialNo")
             if serial:
-                device_zones[serial] = zone_name
+                duties = device.get("duties", [])
+                device_zones[serial] = {
+                    "zone": zone_name,
+                    "is_controller": "ZONE_LEADER" in duties,
+                }
     return device_zones
 
 
@@ -53,7 +58,8 @@ def battery_command(room):
             continue
 
         serial = device.get("serialNo", "")
-        zone_name = device_zones.get(serial, "Unassigned")
+        zone_info = device_zones.get(serial, {"zone": "Unassigned", "is_controller": False})
+        zone_name = zone_info["zone"]
 
         # Apply room filter
         if room and room.lower() not in zone_name.lower():
@@ -67,21 +73,22 @@ def battery_command(room):
             "battery": battery_state,
             "connection": device.get("connectionState", {}).get("value", False),
             "firmware": device.get("currentFwVersion", ""),
+            "is_controller": zone_info["is_controller"],
         })
 
     if not battery_devices:
         click.echo("No battery-powered devices found.")
         return
 
-    # Update persistent history and get 'since' dates
+    # Update persistent history and get date fields
     current_states = {d["serial"]: d["battery"] for d in battery_devices}
     history = update_battery_history(current_states)
     today = date.today().isoformat()
 
     for d in battery_devices:
         entry = history.get(d["serial"], {})
-        since = entry.get("since", today)
-        d["since"] = since
+        d["good_since"] = entry.get("good_since")
+        d["low_since"] = entry.get("low_since")
 
     # Sort by zone, then device type
     battery_devices.sort(key=lambda d: (d["zone"], d["type"], d["name"]))
@@ -97,7 +104,9 @@ def battery_command(room):
         f"{'Type':<{type_width}}  "
         f"{'Serial':<{name_width}}  "
         f"{'Battery':>8}  "
-        f"{'Since':<10}  "
+        f"{'Good since':<10}  "
+        f"{'Low since':<10}  "
+        f"{'Boiler':>6}  "
         f"{'Connected':>9}"
     )
     click.echo()
@@ -114,12 +123,25 @@ def battery_command(room):
         else:
             battery_str = click.style(f"{'Normal':>8}", fg="green")
 
-        # Format 'since' date — dim if first seen today (no history yet)
-        since = d["since"]
-        if since == today:
-            since_str = click.style(f"{since:<10}", fg="bright_black")
+        # Good since — dim if first seen today
+        good_since = d["good_since"] or ""
+        if good_since == today:
+            good_str = click.style(f"{good_since:<10}", fg="bright_black")
         else:
-            since_str = f"{since:<10}"
+            good_str = f"{good_since:<10}"
+
+        # Low since — red if set, blank otherwise
+        low_since = d["low_since"] or ""
+        if low_since:
+            low_str = click.style(f"{low_since:<10}", fg="red")
+        else:
+            low_str = f"{'':<10}"
+
+        # Zone controller (fires boiler)
+        if d["is_controller"]:
+            boiler_str = click.style(f"{'Yes':>6}", fg="green")
+        else:
+            boiler_str = click.style(f"{'No':>6}", fg="bright_black")
 
         # Colour connection status
         connected = d["connection"]
@@ -133,7 +155,9 @@ def battery_command(room):
             f"{d['type']:<{type_width}}  "
             f"{d['name']:<{name_width}}  "
             f"{battery_str}  "
-            f"{since_str}  "
+            f"{good_str}  "
+            f"{low_str}  "
+            f"{boiler_str}  "
             f"{conn_str}"
         )
 
