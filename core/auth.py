@@ -34,8 +34,9 @@ def load_tokens() -> dict | None:
 
 
 def save_tokens(tokens: dict) -> None:
-    """Persist tokens to disk."""
+    """Persist tokens to disk with owner-only permissions."""
     TOKEN_FILE.write_text(json.dumps(tokens, indent=2))
+    TOKEN_FILE.chmod(0o600)
 
 
 def clear_tokens() -> None:
@@ -52,10 +53,14 @@ def device_code_flow() -> dict | None:
     """
     # Step 1: Request device code
     click.echo("Requesting device authorisation...")
-    resp = requests.post(DEVICE_AUTH_URL, data={
-        "client_id": CLIENT_ID,
-        "scope": "offline_access",
-    })
+    try:
+        resp = requests.post(DEVICE_AUTH_URL, data={
+            "client_id": CLIENT_ID,
+            "scope": "offline_access",
+        }, timeout=10)
+    except requests.RequestException as e:
+        click.echo(f"Network error starting device auth: {e}", err=True)
+        return None
 
     if resp.status_code != 200:
         click.echo(f"Failed to start device auth: {resp.status_code} {resp.text}", err=True)
@@ -80,11 +85,14 @@ def device_code_flow() -> dict | None:
     while time.time() < deadline:
         time.sleep(interval)
 
-        resp = requests.post(TOKEN_URL, data={
-            "client_id": CLIENT_ID,
-            "device_code": device_code,
-            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
-        })
+        try:
+            resp = requests.post(TOKEN_URL, data={
+                "client_id": CLIENT_ID,
+                "device_code": device_code,
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+            }, timeout=10)
+        except requests.RequestException:
+            continue
 
         if resp.status_code == 200:
             tokens = resp.json()
@@ -113,11 +121,14 @@ def refresh_access_token(refresh_token: str) -> dict | None:
     Tado uses refresh token rotation, so the new refresh token
     must be persisted (the old one is invalidated).
     """
-    resp = requests.post(TOKEN_URL, data={
-        "client_id": CLIENT_ID,
-        "grant_type": "refresh_token",
-        "refresh_token": refresh_token,
-    })
+    try:
+        resp = requests.post(TOKEN_URL, data={
+            "client_id": CLIENT_ID,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+        }, timeout=10)
+    except requests.RequestException:
+        return None
 
     if resp.status_code == 200:
         tokens = resp.json()

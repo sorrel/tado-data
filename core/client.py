@@ -65,7 +65,7 @@ class TadoClient:
         """
         url = f"{API_BASE}{path}"
         try:
-            resp = self.session.request(method, url)
+            resp = self.session.request(method, url, timeout=10)
         except requests.RequestException as e:
             click.echo(f"Request failed: {e}", err=True)
             return None
