@@ -2,10 +2,31 @@
 Battery reporting command.
 """
 
+from datetime import date
+
 import click
 
 from core.client import TadoClient
 from core.storage import update_battery_history
+
+# Colour bands for battery age, one per 100 days. Bright colours for a black background.
+AGE_BANDS = ["bright_green", "bright_cyan", "bright_yellow", "bright_magenta", "bright_red"]
+
+
+def _days_since(iso_date: str | None) -> int | None:
+    """Return whole days between an ISO date string and today, or None if unparseable."""
+    if not iso_date:
+        return None
+    try:
+        return (date.today() - date.fromisoformat(iso_date)).days
+    except ValueError:
+        return None
+
+
+def _age_colour(days: int) -> str:
+    """Pick a colour for a battery age, changing every 100 days."""
+    band = min(days // 100, len(AGE_BANDS) - 1)
+    return AGE_BANDS[band]
 
 
 def _get_device_zone_map(client: TadoClient) -> dict:
@@ -92,6 +113,7 @@ def battery_command(room):
         f"{'Serial':<{name_width}}  "
         f"{'Battery':>8}  "
         f"{'Good since':<10}  "
+        f"{'Age':>6}  "
         f"{'Low since':<10}  "
         f"{'Connected':>9}"
     )
@@ -111,6 +133,13 @@ def battery_command(room):
 
         good_since = d["good_since"] or ""
         good_str = f"{good_since:<10}"
+
+        # Days since the battery went in, coloured in 100-day bands
+        days = _days_since(d["good_since"])
+        if days is None:
+            age_str = f"{'—':>6}"
+        else:
+            age_str = click.style(f"{days:>5}d", fg=_age_colour(days), bold=True)
 
         # Low since — red if set, blank otherwise
         low_since = d["low_since"] or ""
@@ -132,6 +161,7 @@ def battery_command(room):
             f"{d['name']:<{name_width}}  "
             f"{battery_str}  "
             f"{good_str}  "
+            f"{age_str}  "
             f"{low_str}  "
             f"{conn_str}"
         )
@@ -145,4 +175,11 @@ def battery_command(room):
     else:
         summary += click.style(" (all normal)", fg="green")
     click.echo(summary)
+
+    # Age band legend
+    labels = ["<100d", "100-199d", "200-299d", "300-399d", "400d+"]
+    legend = "  ".join(
+        click.style(label, fg=colour, bold=True) for label, colour in zip(labels, AGE_BANDS)
+    )
+    click.echo(click.style("  Age: ", fg="bright_black") + legend)
     click.echo()
