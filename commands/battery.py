@@ -12,6 +12,10 @@ from core.storage import update_battery_history
 # Colour bands for battery age, one per 100 days. Bright colours for a black background.
 AGE_BANDS = ["bright_green", "bright_cyan", "bright_yellow", "bright_magenta", "bright_red"]
 
+# Devices that are mains-wired despite reporting a batteryState. The hall thermostat
+# is wired in, so its battery columns are meaningless — reported as N/A.
+MAINS_WIRED_SERIALS = {"SU3893321984"}
+
 
 def _days_since(iso_date: str | None) -> int | None:
     """Return whole days between an ISO date string and today, or None if unparseable."""
@@ -77,6 +81,7 @@ def battery_command(room):
 
         battery_devices.append({
             "serial": serial,
+            "mains": serial in MAINS_WIRED_SERIALS,
             "name": device.get("shortSerialNo", serial),
             "type": device.get("deviceType", "Unknown"),
             "zone": zone_name,
@@ -90,7 +95,7 @@ def battery_command(room):
         return
 
     # Update persistent history and get date fields
-    current_states = {d["serial"]: d["battery"] for d in battery_devices}
+    current_states = {d["serial"]: d["battery"] for d in battery_devices if not d["mains"]}
     history = update_battery_history(current_states)
 
     for d in battery_devices:
@@ -124,6 +129,25 @@ def battery_command(room):
     # Rows
     low_count = 0
     for d in battery_devices:
+        # Mains-wired devices have no meaningful battery data
+        if d["mains"]:
+            battery_str = click.style(f"{'N/A':>8}", fg="bright_black")
+            good_str = click.style(f"{'N/A':<10}", fg="bright_black")
+            age_str = click.style(f"{'N/A':>6}", fg="bright_black")
+            low_str = click.style(f"{'N/A':<10}", fg="bright_black")
+            conn_str = (
+                click.style(f"{'Yes':>9}", fg="green")
+                if d["connection"]
+                else click.style(f"{'No':>9}", fg="red")
+            )
+            click.echo(
+                f"  {d['zone']:<{zone_width}}  "
+                f"{d['type']:<{type_width}}  "
+                f"{d['name']:<{name_width}}  "
+                f"{battery_str}  {good_str}  {age_str}  {low_str}  {conn_str}"
+            )
+            continue
+
         # Colour the battery status
         if d["battery"] == "LOW":
             battery_str = click.style(f"{'LOW':>8}", fg="red", bold=True)
@@ -167,9 +191,12 @@ def battery_command(room):
         )
 
     # Summary
-    total = len(battery_devices)
+    mains_count = sum(1 for d in battery_devices if d["mains"])
+    total = len(battery_devices) - mains_count
     click.echo()
     summary = f"  {total} battery-powered device{'s' if total != 1 else ''}"
+    if mains_count:
+        summary += click.style(f" (+{mains_count} mains-wired)", fg="bright_black")
     if low_count:
         summary += click.style(f" ({low_count} LOW)", fg="red", bold=True)
     else:
