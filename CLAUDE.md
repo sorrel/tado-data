@@ -85,6 +85,10 @@ OAuth2 Device Code Grant flow (required by Tado since March 2025):
 
 ## Git Workflow
 
+**"Release" means the whole process: commit → push → PR → merge.** When Duncan
+says "release it" (or "release the update"), do all four steps, not just the
+commit.
+
 **Always go through a pull request. Never commit directly to `main`.**
 
 Even though this is a single-person project, every change goes on a feature
