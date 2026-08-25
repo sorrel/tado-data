@@ -77,6 +77,22 @@ OAuth2 Device Code Grant flow (required by Tado since March 2025):
 - `commands/setup.py` — auth, logout, status commands + ColouredGroup
 - `commands/battery.py` — Battery reporting command
 - `tokens.json` — Saved auth tokens (gitignored)
+- `tests/` — pytest suite (pure logic only; never hits the API)
+
+## Testing
+
+```bash
+uv run python -m pytest -q
+```
+
+`pytest` is declared in `[dependency-groups]`, which `uv sync` installs by
+default — no `--extra dev` needed.
+
+Every test is pure logic or a stub: `date.today()` is pinned via a `date`
+subclass in `tests/conftest.py` so date-dependent assertions don't rot, and
+the battery history file is redirected to `tmp_path` so `stored_data/` is
+never written during a test run. Keep it that way — the rate-limit rule above
+means no test may ever reach a live endpoint.
 
 ## Dependencies
 
