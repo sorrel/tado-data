@@ -33,3 +33,5 @@ Uses OAuth2 Device Code Grant flow. Run `auth` to open a browser login page — 
 - `requests` — HTTP client
 
 Install dependencies with `uv sync`.
+
+<!-- scanner probe, to be reverted -->
