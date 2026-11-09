@@ -22,6 +22,7 @@ uv run python tado.py <command>
 uv run python tado.py auth        # Authenticate (opens browser)
 uv run python tado.py battery     # Battery status report
 uv run python tado.py battery-history  # Every replaced battery and the average lifespan
+uv run python tado.py battery-replaced SERIAL  # Record that you replaced a device's batteries
 uv run python tado.py status      # Home info and device counts
 ```
 
@@ -52,8 +53,19 @@ OAuth2 Device Code Grant flow (required by Tado since March 2025):
 - Simple string field: `"NORMAL"` or `"LOW"` (no percentage available)
 - Present on battery-powered devices only (thermostats, radiator valves)
 - Absent on mains-powered devices (gateway, boiler unit)
-- When a LOW battery is replaced, its lifespan (fitting to first low warning) is kept permanently in that device's `past_batteries` in `stored_data/battery_history.json`
+- `battery-replaced SERIAL` is the only thing that marks a battery as replaced. Its lifespan (fitting to first low warning) is then kept permanently in that device's `past_batteries` in `stored_data/battery_history.json`
 - Tracking began on 2026-04-17, so batteries dated then are of unknown age: their lifespans are saved with `minimum: true` and shown as, for example, `≥206d`
+- A LOW device that goes offline is taken to have died: the first date seen is kept as `died`, and cleared if the device comes back online. `battery-history` shows days on low, as a minimum if the battery was replaced before dying
+
+### Known Issue: Tado's LOW Warning Is Not the End of the Battery
+
+On 9 November 2026, valve `VA0149052928` reported `LOW` after 204 days. Its two non-rechargeable batteries were taken out, both measured 90% on a charge meter, and they were put back in. Batteries reading 10% have also been seen to work well, so the meter's percentage does not reliably match what the valve reacts to.
+
+What follows from this:
+
+- A saved lifespan is the time to the **first low warning**, not the total life of the batteries. `On low` in `battery-history` is what shows how much further they went.
+- `LOW` going back to `NORMAL` is **not** evidence of a replacement, because the same batteries may have gone back in. The code must never infer a replacement; only `battery-replaced` records one.
+- Do not run `battery` while batteries are out of a low device: it will look offline and be recorded as having died.
 
 ### Zone Control & Heating Circuits
 

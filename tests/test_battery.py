@@ -110,7 +110,11 @@ class FakeReportClient:
 
 
 def test_report_shows_the_last_lifespan_after_a_replacement(frozen_today, history_file, monkeypatch):
-    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": "2026-08-20"}}}))
+    history_file.write_text(json.dumps({"devices": {"VA1": {
+        "good_since": "2026-08-20",
+        "low_since": None,
+        "past_batteries": [{"days": 111, "minimum": False}],
+    }}}))
     monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
 
     result = CliRunner().invoke(battery_mod.battery_command)
@@ -203,6 +207,83 @@ def test_history_still_lists_batteries_when_tado_is_unavailable(frozen_today, hi
     assert result.exit_code == 0
     assert "VA1" in result.output
     assert "Average: 204d from 1 set" in result.output
+
+
+# --- how long a battery keeps going once low --------------------------------
+
+
+def test_on_low_counts_to_the_day_it_died():
+    battery = {"went_low": "2026-11-09", "died": "2026-11-15", "replaced": "2026-11-20"}
+
+    assert battery_mod._on_low(battery) == {"days": 6, "minimum": False}
+
+
+def test_on_low_is_a_minimum_when_replaced_before_it_died():
+    battery = {"went_low": "2026-11-09", "replaced": "2026-11-20"}
+
+    assert battery_mod._on_low(battery) == {"days": 11, "minimum": True}
+
+
+def test_report_records_a_low_device_that_has_gone_offline(frozen_today, history_file, monkeypatch):
+    class DeadDeviceClient(FakeReportClient):
+        def get_devices(self):
+            return [{
+                "serialNo": "VA1",
+                "shortSerialNo": "VA1",
+                "deviceType": "VA01",
+                "batteryState": "LOW",
+                "connectionState": {"value": False},
+            }]
+
+    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": "2026-08-20"}}}))
+    monkeypatch.setattr(battery_mod, "TadoClient", DeadDeviceClient)
+
+    CliRunner().invoke(battery_mod.battery_command)
+
+    assert json.loads(history_file.read_text())["devices"]["VA1"]["died"] == "2026-08-25"
+
+
+def test_history_shows_time_on_low_and_its_average(frozen_today, history_file, monkeypatch):
+    _seed_history(history_file, [
+        {**_past("2026-04-19", 204), "died": "2026-11-10"},  # 1 day on low, then died
+        _past("2026-04-20", 203),  # replaced after 1 day, still going
+    ])
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    assert "On low" in result.output
+    assert "≥1d" in result.output
+    assert "Average on low: 1d from 1 set" in result.output
+
+
+def test_history_has_no_low_average_until_one_has_died(frozen_today, history_file, monkeypatch):
+    _seed_history(history_file, [_past("2026-04-19", 204)])
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    assert "Average on low" not in result.output
+
+
+# --- the battery-replaced command -----------------------------------------
+
+
+def test_replaced_command_saves_the_lifespan(frozen_today, history_file):
+    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": "2026-08-20"}}}))
+
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"])
+
+    assert result.exit_code == 0
+    assert "111" in result.output
+    assert json.loads(history_file.read_text())["devices"]["VA1"]["past_batteries"][0]["days"] == 111
+
+
+def test_replaced_command_refuses_an_unknown_serial(frozen_today, history_file):
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["NOPE"])
+
+    assert result.exit_code != 0
+    assert "No battery history for NOPE" in result.output
 
 
 # --- _get_device_zone_map -------------------------------------------------

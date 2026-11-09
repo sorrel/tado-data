@@ -47,33 +47,69 @@ def load_battery_history() -> dict:
     return {serial: _migrate_entry(entry) for serial, entry in raw.items()}
 
 
-def _retired_battery(fitted: str, went_low: str, replaced: str) -> dict | None:
+def _retired_battery(fitted: str, went_low: str, replaced: str, died: str | None) -> dict | None:
     """Build the permanent record of a replaced battery, or None if its dates are unusable."""
     try:
         days = (date.fromisoformat(went_low) - date.fromisoformat(fitted)).days
     except ValueError:
         return None
-    return {
+    record = {
         "fitted": fitted,
         "went_low": went_low,
         "replaced": replaced,
         "days": days,
         "minimum": fitted <= TRACKING_STARTED,
     }
+    if died:
+        record["died"] = died
+    return record
 
 
-def update_battery_history(current_states: dict[str, str]) -> dict:
+def mark_battery_replaced(serial: str) -> dict | None:
+    """
+    Record that the user has replaced a device's batteries, and restart its clock.
+
+    Returns the saved record of the old battery, or None if it never went
+    LOW or its dates are unusable, so there is no lifespan to keep.
+    Raises KeyError if the device has no history.
+    """
+    history = load_battery_history()
+    entry = history[serial]
+    today = date.today().isoformat()
+    past = list(entry.get("past_batteries", []))
+
+    retired = None
+    if entry.get("good_since") and entry.get("low_since"):
+        retired = _retired_battery(entry["good_since"], entry["low_since"], today, entry.get("died"))
+    if retired:
+        past.append(retired)
+
+    new_entry = {"good_since": today, "low_since": None}
+    if past:
+        new_entry["past_batteries"] = past
+    history[serial] = new_entry
+    _save_json(BATTERY_HISTORY_FILE, {"devices": history})
+    return retired
+
+
+def update_battery_history(current_states: dict[str, str], disconnected: set[str] | None = None) -> dict:
     """
     Update battery history with current states.
 
     Tracks good_since (last time battery became NORMAL) and
     low_since (when it went LOW) independently, so neither is
-    lost when the state changes. When a LOW battery is replaced, its
-    lifespan is added to the device's permanent past_batteries list.
+    lost when the state changes. Replacements are never inferred here;
+    see mark_battery_replaced.
+
+    A LOW device that is offline is taken to have died, and the first date
+    that is seen is kept in died. If it comes back online it wasn't dead,
+    so the date is cleared.
 
     current_states: {serial: "NORMAL" | "LOW"}
+    disconnected: serials currently offline
     Returns updated history dict.
     """
+    disconnected = disconnected or set()
     history = load_battery_history()
     today = date.today().isoformat()
     changed = False
@@ -82,23 +118,26 @@ def update_battery_history(current_states: dict[str, str]) -> dict:
         entry = history.get(serial, {})
         prev_good = entry.get("good_since")
         prev_low = entry.get("low_since")
+        prev_died = entry.get("died")
         past = list(entry.get("past_batteries", []))
+        new_died = None
 
         if state == "NORMAL":
-            if prev_good and prev_low:
-                retired = _retired_battery(prev_good, prev_low, today)
-                if retired:
-                    past.append(retired)
-
-            # Reset good_since on LOW → NORMAL (battery replaced); preserve if already good
-            new_good = today if prev_low else (prev_good if prev_good else today)
-            new_low = None
+            # Going back to NORMAL proves nothing: the same batteries may have gone
+            # back in. Only mark_battery_replaced restarts the clock.
+            new_good = prev_good if prev_low else (prev_good or today)
+            new_low = prev_low
         else:
             # Went from NORMAL → LOW (or first time seen as LOW)
             new_good = prev_good  # preserve — this is how long the battery lasted
-            new_low = prev_low if prev_low else today
+            # A LOW reading on the day of fitting is Tado still reporting the old state
+            new_low = prev_low or (None if prev_good == today else today)
+            if serial in disconnected:
+                new_died = prev_died or today
 
         new_entry = {"good_since": new_good, "low_since": new_low}
+        if new_died:
+            new_entry["died"] = new_died
         if past:
             new_entry["past_batteries"] = past
         if new_entry != entry:
