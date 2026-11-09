@@ -26,6 +26,8 @@ uv run python tado.py battery-replaced SERIAL  # Record that you replaced a devi
 uv run python tado.py status      # Home info and device counts
 ```
 
+`tools/completion.zsh`, sourced from `~/.zshrc`, adds a `tado` shell command with tab completion that works from any directory. It's bound to `tado` because football-stats already holds the completion for `uv`.
+
 ## Architecture
 
 ### Authentication
