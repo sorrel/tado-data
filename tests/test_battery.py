@@ -266,6 +266,35 @@ def test_history_has_no_low_average_until_one_has_died(frozen_today, history_fil
     assert "Average on low" not in result.output
 
 
+# --- the record of low spells ----------------------------------------------
+
+
+def test_history_lists_low_spells_before_any_replacement(frozen_today, history_file, monkeypatch):
+    history_file.write_text(json.dumps({"devices": {"VA1": {
+        "good_since": "2026-05-01",
+        "low_since": "2026-08-20",
+        "low_periods": [{"from": "2026-08-20", "to": "2026-08-21"}, {"from": "2026-08-24", "to": None}],
+    }}}))
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    assert "Low warnings" in result.output
+    assert "2026-08-21" in result.output
+    assert "still low" in result.output
+    assert "No replaced batteries" not in result.output
+
+
+def test_history_keeps_showing_low_spells_of_replaced_batteries(frozen_today, history_file, monkeypatch):
+    spell = {"from": "2026-07-01", "to": "2026-07-02"}
+    _seed_history(history_file, [{**_past("2026-04-19", 204), "low_periods": [spell]}])
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    assert "2026-07-02" in result.output
+
+
 # --- the battery-replaced command -----------------------------------------
 
 

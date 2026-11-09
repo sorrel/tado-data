@@ -260,22 +260,8 @@ def battery_replaced_command(serial):
         click.echo(f"{serial} marked as replaced. The old set had no recorded low warning, so no lifespan was saved.")
 
 
-@click.command("battery-history")
-def battery_history_command():
-    """Show how long every replaced battery lasted, with the average."""
-    lifespans = [
-        (serial, battery)
-        for serial, entry in load_battery_history().items()
-        for battery in entry.get("past_batteries", [])
-    ]
-    if not lifespans:
-        click.echo("No replaced batteries recorded yet.")
-        return
-
-    # Room names need the API; the history itself is local, so carry on without them.
-    client = TadoClient()
-    device_zones = _get_device_zone_map(client) if client.connect() else {}
-
+def _print_lifespans(lifespans: list[tuple[str, dict]], device_zones: dict) -> None:
+    """Print the table of replaced batteries and their averages."""
     rows = sorted(
         ((device_zones.get(serial, "Unassigned"), serial, battery) for serial, battery in lifespans),
         key=lambda row: (row[0], row[2]["fitted"]),
@@ -329,3 +315,62 @@ def battery_history_command():
         died = sum(1 for battery in on_low if not battery["minimum"])
         click.echo(f"  Average on low: {low_average}d from {died} set{'s' if died != 1 else ''}")
     click.echo()
+
+
+def _print_low_periods(lows: list[tuple[str, dict]], device_zones: dict) -> None:
+    """Print every spell a device has spent reporting LOW."""
+    rows = sorted(
+        ((device_zones.get(serial, "Unassigned"), serial, period) for serial, period in lows),
+        key=lambda row: (row[0], row[2]["from"]),
+    )
+    zone_width = max(len("Zone"), *(len(zone) for zone, _, _ in rows))
+    serial_width = max(len("Serial"), *(len(serial) for _, serial, _ in rows))
+
+    header = (
+        f"  {'Zone':<{zone_width}}  "
+        f"{'Serial':<{serial_width}}  "
+        f"{'Went low':<10}  "
+        f"{'Normal again':<12}  "
+        f"{'Days':>6}"
+    )
+    click.echo(click.style("  Low warnings", fg="bright_white", bold=True))
+    click.echo(click.style(header, fg="bright_white", bold=True))
+    click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
+
+    for zone, serial, period in rows:
+        end = date.fromisoformat(period["to"]) if period["to"] else date.today()
+        days = (end - date.fromisoformat(period["from"])).days
+        click.echo(
+            f"  {zone:<{zone_width}}  "
+            f"{serial:<{serial_width}}  "
+            f"{period['from']:<10}  "
+            f"{period['to'] or 'still low':<12}  "
+            f"{days:>5}d"
+        )
+    click.echo()
+
+
+@click.command("battery-history")
+def battery_history_command():
+    """Show every replaced battery and low warning, with averages."""
+    history = load_battery_history()
+    lifespans = [
+        (serial, battery)
+        for serial, entry in history.items()
+        for battery in entry.get("past_batteries", [])
+    ]
+    lows = [(serial, period) for serial, entry in history.items() for period in entry.get("low_periods", [])]
+    lows += [(serial, period) for serial, battery in lifespans for period in battery.get("low_periods", [])]
+
+    if not lifespans and not lows:
+        click.echo("No replaced batteries recorded yet.")
+        return
+
+    # Room names need the API; the history itself is local, so carry on without them.
+    client = TadoClient()
+    device_zones = _get_device_zone_map(client) if client.connect() else {}
+
+    if lifespans:
+        _print_lifespans(lifespans, device_zones)
+    if lows:
+        _print_low_periods(lows, device_zones)

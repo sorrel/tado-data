@@ -82,6 +82,8 @@ def mark_battery_replaced(serial: str) -> dict | None:
     if entry.get("good_since") and entry.get("low_since"):
         retired = _retired_battery(entry["good_since"], entry["low_since"], today, entry.get("died"))
     if retired:
+        if entry.get("low_periods"):
+            retired["low_periods"] = entry["low_periods"]
         past.append(retired)
 
     new_entry = {"good_since": today, "low_since": None}
@@ -122,22 +124,33 @@ def update_battery_history(current_states: dict[str, str], disconnected: set[str
         past = list(entry.get("past_batteries", []))
         new_died = None
 
+        periods = [dict(period) for period in entry.get("low_periods", [])]
+        if prev_low and not periods:
+            # A low date saved before low spells were recorded
+            periods = [{"from": prev_low, "to": None}]
+
         if state == "NORMAL":
             # Going back to NORMAL proves nothing: the same batteries may have gone
             # back in. Only mark_battery_replaced restarts the clock.
             new_good = prev_good if prev_low else (prev_good or today)
             new_low = prev_low
+            if periods and periods[-1]["to"] is None:
+                periods[-1]["to"] = today
         else:
             # Went from NORMAL → LOW (or first time seen as LOW)
             new_good = prev_good  # preserve — this is how long the battery lasted
             # A LOW reading on the day of fitting is Tado still reporting the old state
             new_low = prev_low or (None if prev_good == today else today)
+            if new_low and (not periods or periods[-1]["to"] is not None):
+                periods.append({"from": today, "to": None})
             if serial in disconnected:
                 new_died = prev_died or today
 
         new_entry = {"good_since": new_good, "low_since": new_low}
         if new_died:
             new_entry["died"] = new_died
+        if periods:
+            new_entry["low_periods"] = periods
         if past:
             new_entry["past_batteries"] = past
         if new_entry != entry:
