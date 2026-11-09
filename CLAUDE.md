@@ -21,6 +21,7 @@ uv run python tado.py <command>
 # Examples
 uv run python tado.py auth        # Authenticate (opens browser)
 uv run python tado.py battery     # Battery status report
+uv run python tado.py battery-history  # Every replaced battery and the average lifespan
 uv run python tado.py status      # Home info and device counts
 ```
 
@@ -51,6 +52,8 @@ OAuth2 Device Code Grant flow (required by Tado since March 2025):
 - Simple string field: `"NORMAL"` or `"LOW"` (no percentage available)
 - Present on battery-powered devices only (thermostats, radiator valves)
 - Absent on mains-powered devices (gateway, boiler unit)
+- When a LOW battery is replaced, its lifespan (fitting to first low warning) is kept permanently in that device's `past_batteries` in `stored_data/battery_history.json`
+- Tracking began on 2026-04-17, so batteries dated then are of unknown age: their lifespans are saved with `minimum: true` and shown as, for example, `≥206d`
 
 ### Zone Control & Heating Circuits
 

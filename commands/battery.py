@@ -7,7 +7,7 @@ from datetime import date
 import click
 
 from core.client import TadoClient
-from core.storage import update_battery_history
+from core.storage import load_battery_history, update_battery_history
 
 # Colour bands for battery age, one per 100 days. Bright colours for a black background.
 AGE_BANDS = ["bright_green", "bright_cyan", "bright_yellow", "bright_magenta", "bright_red"]
@@ -31,6 +31,23 @@ def _age_colour(days: int) -> str:
     """Pick a colour for a battery age, changing every 100 days."""
     band = min(days // 100, len(AGE_BANDS) - 1)
     return AGE_BANDS[band]
+
+
+def _format_last(past_batteries: list[dict]) -> str:
+    """Format how long the previous battery lasted, marking unknown-age ones as a minimum."""
+    if not past_batteries:
+        return f"{'':>6}"
+    last = past_batteries[-1]
+    label = f"≥{last['days']}d" if last.get("minimum") else f"{last['days']}d"
+    return click.style(f"{label:>6}", fg=_age_colour(last["days"]), bold=True)
+
+
+def _average_days(lifespans: list[dict]) -> int | None:
+    """Average the measured lifespans, leaving out unknown-age minimums."""
+    measured = [b["days"] for b in lifespans if not b.get("minimum")]
+    if not measured:
+        return None
+    return round(sum(measured) / len(measured))
 
 
 def _get_device_zone_map(client: TadoClient) -> dict:
@@ -102,6 +119,7 @@ def battery_command(room):
         entry = history.get(d["serial"], {})
         d["good_since"] = entry.get("good_since")
         d["low_since"] = entry.get("low_since")
+        d["past_batteries"] = entry.get("past_batteries", [])
 
     # Sort by zone, then device type
     battery_devices.sort(key=lambda d: (d["zone"], d["type"], d["name"]))
@@ -119,6 +137,7 @@ def battery_command(room):
         f"{'Battery':>8}  "
         f"{'Good since':<10}  "
         f"{'Age':>6}  "
+        f"{'Last':>6}  "
         f"{'Low since':<10}  "
         f"{'Connected':>9}"
     )
@@ -134,6 +153,7 @@ def battery_command(room):
             battery_str = click.style(f"{'N/A':>8}", fg="bright_black")
             good_str = click.style(f"{'N/A':<10}", fg="bright_black")
             age_str = click.style(f"{'N/A':>6}", fg="bright_black")
+            last_str = click.style(f"{'N/A':>6}", fg="bright_black")
             low_str = click.style(f"{'N/A':<10}", fg="bright_black")
             conn_str = (
                 click.style(f"{'Yes':>9}", fg="green")
@@ -144,7 +164,7 @@ def battery_command(room):
                 f"  {d['zone']:<{zone_width}}  "
                 f"{d['type']:<{type_width}}  "
                 f"{d['name']:<{name_width}}  "
-                f"{battery_str}  {good_str}  {age_str}  {low_str}  {conn_str}"
+                f"{battery_str}  {good_str}  {age_str}  {last_str}  {low_str}  {conn_str}"
             )
             continue
 
@@ -164,6 +184,8 @@ def battery_command(room):
             age_str = f"{'—':>6}"
         else:
             age_str = click.style(f"{days:>5}d", fg=_age_colour(days), bold=True)
+
+        last_str = _format_last(d["past_batteries"])
 
         # Low since — red if set, blank otherwise
         low_since = d["low_since"] or ""
@@ -186,6 +208,7 @@ def battery_command(room):
             f"{battery_str}  "
             f"{good_str}  "
             f"{age_str}  "
+            f"{last_str}  "
             f"{low_str}  "
             f"{conn_str}"
         )
@@ -209,4 +232,66 @@ def battery_command(room):
         click.style(label, fg=colour, bold=True) for label, colour in zip(labels, AGE_BANDS)
     )
     click.echo(click.style("  Age: ", fg="bright_black") + legend)
+    click.echo()
+
+
+@click.command("battery-history")
+def battery_history_command():
+    """Show how long every replaced battery lasted, with the average."""
+    lifespans = [
+        (serial, battery)
+        for serial, entry in load_battery_history().items()
+        for battery in entry.get("past_batteries", [])
+    ]
+    if not lifespans:
+        click.echo("No replaced batteries recorded yet.")
+        return
+
+    # Room names need the API; the history itself is local, so carry on without them.
+    client = TadoClient()
+    device_zones = _get_device_zone_map(client) if client.connect() else {}
+
+    rows = sorted(
+        ((device_zones.get(serial, "Unassigned"), serial, battery) for serial, battery in lifespans),
+        key=lambda row: (row[0], row[2]["fitted"]),
+    )
+    zone_width = max(len("Zone"), *(len(zone) for zone, _, _ in rows))
+    serial_width = max(len("Serial"), *(len(serial) for _, serial, _ in rows))
+
+    header = (
+        f"  {'Zone':<{zone_width}}  "
+        f"{'Serial':<{serial_width}}  "
+        f"{'Fitted':<10}  "
+        f"{'Went low':<10}  "
+        f"{'Replaced':<10}  "
+        f"{'Lasted':>6}"
+    )
+    click.echo()
+    click.echo(click.style(header, fg="bright_white", bold=True))
+    click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
+
+    for zone, serial, battery in rows:
+        click.echo(
+            f"  {zone:<{zone_width}}  "
+            f"{serial:<{serial_width}}  "
+            f"{battery['fitted']:<10}  "
+            f"{battery['went_low']:<10}  "
+            f"{battery['replaced']:<10}  "
+            f"{_format_last([battery])}"
+        )
+
+    # Average of the sets whose real lifespan we know
+    all_batteries = [battery for _, battery in lifespans]
+    measured = sum(1 for battery in all_batteries if not battery.get("minimum"))
+    unknown = len(all_batteries) - measured
+    average = _average_days(all_batteries)
+
+    click.echo()
+    if average is None:
+        click.echo("  Average: none yet, every set so far is of unknown age")
+    else:
+        summary = f"  Average: {average}d from {measured} set{'s' if measured != 1 else ''}"
+        if unknown:
+            summary += click.style(f" ({unknown} of unknown age not counted)", fg="bright_black")
+        click.echo(summary)
     click.echo()
