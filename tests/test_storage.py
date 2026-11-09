@@ -33,7 +33,8 @@ def test_new_normal_device_records_good_since_today(frozen_today, history_file):
 def test_new_low_device_records_low_since_today(frozen_today, history_file):
     history = update_battery_history({SERIAL: "LOW"})
 
-    assert history[SERIAL] == {"good_since": None, "low_since": "2026-08-25"}
+    assert history[SERIAL]["good_since"] is None
+    assert history[SERIAL]["low_since"] == "2026-08-25"
 
 
 # --- state transitions ----------------------------------------------------
@@ -45,10 +46,8 @@ def test_normal_to_low_preserves_good_since(frozen_today, history_file):
 
     history = update_battery_history({SERIAL: "LOW"})
 
-    assert history[SERIAL] == {
-        "good_since": "2025-01-10",  # untouched
-        "low_since": "2026-08-25",
-    }
+    assert history[SERIAL]["good_since"] == "2025-01-10"  # untouched
+    assert history[SERIAL]["low_since"] == "2026-08-25"
 
 
 def test_going_back_to_normal_is_not_a_replacement(frozen_today, history_file):
@@ -57,7 +56,8 @@ def test_going_back_to_normal_is_not_a_replacement(frozen_today, history_file):
 
     history = update_battery_history({SERIAL: "NORMAL"})
 
-    assert history[SERIAL] == {"good_since": "2026-05-01", "low_since": "2026-08-20"}
+    assert history[SERIAL]["good_since"] == "2026-05-01"
+    assert history[SERIAL]["low_since"] == "2026-08-20"
 
 
 def test_normal_stays_normal_does_not_bump_good_since(frozen_today, history_file):
@@ -259,6 +259,67 @@ def test_low_reading_on_the_day_of_fitting_is_ignored(frozen_today, history_file
     assert history[SERIAL]["low_since"] is None
 
 
+# --- the record of low spells ----------------------------------------------
+
+
+def test_going_low_opens_a_low_spell(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
+
+    history = update_battery_history({SERIAL: "LOW"})
+
+    assert history[SERIAL]["low_periods"] == [{"from": "2026-08-25", "to": None}]
+
+
+def test_staying_low_keeps_one_spell(frozen_today, history_file):
+    spell = {"from": "2026-08-20", "to": None}
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "low_periods": [spell]}})
+
+    history = update_battery_history({SERIAL: "LOW"})
+
+    assert history[SERIAL]["low_periods"] == [spell]
+
+
+def test_going_back_to_normal_closes_the_spell(frozen_today, history_file):
+    _write(history_file, {SERIAL: {
+        "good_since": "2026-05-01",
+        "low_since": "2026-08-20",
+        "low_periods": [{"from": "2026-08-20", "to": None}],
+    }})
+
+    history = update_battery_history({SERIAL: "NORMAL"})
+
+    assert history[SERIAL]["low_periods"] == [{"from": "2026-08-20", "to": "2026-08-25"}]
+
+
+def test_low_date_saved_before_spells_existed_is_kept(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20"}})
+
+    history = update_battery_history({SERIAL: "NORMAL"})
+
+    assert history[SERIAL]["low_periods"] == [{"from": "2026-08-20", "to": "2026-08-25"}]
+
+
+def test_going_low_again_adds_a_second_spell(frozen_today, history_file):
+    first = {"from": "2026-08-20", "to": "2026-08-21"}
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "low_periods": [first]}})
+
+    history = update_battery_history({SERIAL: "LOW"})
+
+    assert history[SERIAL]["low_periods"] == [first, {"from": "2026-08-25", "to": None}]
+    assert history[SERIAL]["low_since"] == "2026-08-20"  # still the first warning
+
+
+def test_replacing_a_battery_keeps_its_low_spells(frozen_today, history_file):
+    spells = [{"from": "2026-08-20", "to": "2026-08-21"}]
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "low_periods": spells}})
+
+    mark_battery_replaced(SERIAL)
+
+    entry = load_battery_history()[SERIAL]
+    assert entry["past_batteries"][0]["low_periods"] == spells
+    assert "low_periods" not in entry
+
+
 # --- persistence ----------------------------------------------------------
 
 
@@ -275,7 +336,7 @@ def test_multiple_devices_tracked_independently(frozen_today, history_file):
     history = update_battery_history({"AAA": "NORMAL", "BBB": "LOW"})
 
     assert history["AAA"] == {"good_since": "2026-08-25", "low_since": None}
-    assert history["BBB"] == {"good_since": None, "low_since": "2026-08-25"}
+    assert history["BBB"]["low_since"] == "2026-08-25"
 
 
 # --- legacy format migration ---------------------------------------------
