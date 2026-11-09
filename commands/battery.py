@@ -7,7 +7,7 @@ from datetime import date
 import click
 
 from core.client import TadoClient
-from core.storage import load_battery_history, update_battery_history
+from core.storage import load_battery_history, mark_battery_replaced, update_battery_history
 
 # Colour bands for battery age, one per 100 days. Bright colours for a black background.
 AGE_BANDS = ["bright_green", "bright_cyan", "bright_yellow", "bright_magenta", "bright_red"]
@@ -48,6 +48,13 @@ def _average_days(lifespans: list[dict]) -> int | None:
     if not measured:
         return None
     return round(sum(measured) / len(measured))
+
+
+def _on_low(battery: dict) -> dict:
+    """How long a battery kept going once low; a minimum if it was replaced before dying."""
+    died = battery.get("died")
+    end = date.fromisoformat(died or battery["replaced"])
+    return {"days": (end - date.fromisoformat(battery["went_low"])).days, "minimum": not died}
 
 
 def _get_device_zone_map(client: TadoClient) -> dict:
@@ -113,7 +120,8 @@ def battery_command(room):
 
     # Update persistent history and get date fields
     current_states = {d["serial"]: d["battery"] for d in battery_devices if not d["mains"]}
-    history = update_battery_history(current_states)
+    disconnected = {d["serial"] for d in battery_devices if not d["mains"] and not d["connection"]}
+    history = update_battery_history(current_states, disconnected)
 
     for d in battery_devices:
         entry = history.get(d["serial"], {})
@@ -235,6 +243,23 @@ def battery_command(room):
     click.echo()
 
 
+@click.command("battery-replaced")
+@click.argument("serial")
+def battery_replaced_command(serial):
+    """Record that you have replaced the batteries in device SERIAL."""
+    serial = serial.upper()
+    try:
+        retired = mark_battery_replaced(serial)
+    except KeyError:
+        raise click.ClickException(f"No battery history for {serial}.")
+
+    if retired:
+        prefix = "at least " if retired["minimum"] else ""
+        click.echo(f"{serial} marked as replaced. The old set reached its low warning after {prefix}{retired['days']} days.")
+    else:
+        click.echo(f"{serial} marked as replaced. The old set had no recorded low warning, so no lifespan was saved.")
+
+
 @click.command("battery-history")
 def battery_history_command():
     """Show how long every replaced battery lasted, with the average."""
@@ -264,7 +289,8 @@ def battery_history_command():
         f"{'Fitted':<10}  "
         f"{'Went low':<10}  "
         f"{'Replaced':<10}  "
-        f"{'Lasted':>6}"
+        f"{'Lasted':>6}  "
+        f"{'On low':>6}"
     )
     click.echo()
     click.echo(click.style(header, fg="bright_white", bold=True))
@@ -277,7 +303,8 @@ def battery_history_command():
             f"{battery['fitted']:<10}  "
             f"{battery['went_low']:<10}  "
             f"{battery['replaced']:<10}  "
-            f"{_format_last([battery])}"
+            f"{_format_last([battery])}  "
+            f"{_format_last([_on_low(battery)])}"
         )
 
     # Average of the sets whose real lifespan we know
@@ -294,4 +321,11 @@ def battery_history_command():
         if unknown:
             summary += click.style(f" ({unknown} of unknown age not counted)", fg="bright_black")
         click.echo(summary)
+
+    # Only batteries that actually died tell us how long a low one keeps going
+    on_low = [_on_low(battery) for battery in all_batteries]
+    low_average = _average_days(on_low)
+    if low_average is not None:
+        died = sum(1 for battery in on_low if not battery["minimum"])
+        click.echo(f"  Average on low: {low_average}d from {died} set{'s' if died != 1 else ''}")
     click.echo()

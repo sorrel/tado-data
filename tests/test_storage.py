@@ -8,7 +8,9 @@ how long it lasted. Most of what follows pins down that behaviour.
 
 import json
 
-from core.storage import load_battery_history, update_battery_history
+import pytest
+
+from core.storage import load_battery_history, mark_battery_replaced, update_battery_history
 
 SERIAL = "VA1234567890"
 
@@ -49,14 +51,13 @@ def test_normal_to_low_preserves_good_since(frozen_today, history_file):
     }
 
 
-def test_low_to_normal_resets_good_since_and_clears_low(frozen_today, history_file):
-    """A LOW -> NORMAL transition means the battery was replaced."""
-    _write(history_file, {SERIAL: {"good_since": "2025-01-10", "low_since": "2026-06-01"}})
+def test_going_back_to_normal_is_not_a_replacement(frozen_today, history_file):
+    """Only the user can say a battery was replaced; the same ones may have gone back in."""
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20"}})
 
     history = update_battery_history({SERIAL: "NORMAL"})
 
-    assert history[SERIAL]["good_since"] == "2026-08-25"
-    assert history[SERIAL]["low_since"] is None
+    assert history[SERIAL] == {"good_since": "2026-05-01", "low_since": "2026-08-20"}
 
 
 def test_normal_stays_normal_does_not_bump_good_since(frozen_today, history_file):
@@ -83,7 +84,8 @@ def test_replacing_a_low_battery_keeps_its_lifespan(frozen_today, history_file):
     """Days run from fitting to the first low warning, not to the swap."""
     _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20"}})
 
-    history = update_battery_history({SERIAL: "NORMAL"})
+    mark_battery_replaced(SERIAL)
+    history = load_battery_history()
 
     assert history[SERIAL]["past_batteries"] == [
         {
@@ -100,7 +102,8 @@ def test_battery_already_fitted_when_tracking_began_is_a_minimum(frozen_today, h
     """We never saw these go in, so the true lifespan is longer than recorded."""
     _write(history_file, {SERIAL: {"good_since": "2026-04-17", "low_since": "2026-08-20"}})
 
-    history = update_battery_history({SERIAL: "NORMAL"})
+    mark_battery_replaced(SERIAL)
+    history = load_battery_history()
 
     assert history[SERIAL]["past_batteries"][0]["minimum"] is True
 
@@ -118,7 +121,8 @@ def test_new_lifespan_is_added_after_earlier_ones(frozen_today, history_file):
         {SERIAL: {"good_since": "2026-06-02", "low_since": "2026-08-20", "past_batteries": [earlier]}},
     )
 
-    history = update_battery_history({SERIAL: "NORMAL"})
+    mark_battery_replaced(SERIAL)
+    history = load_battery_history()
 
     past = history[SERIAL]["past_batteries"]
     assert past[0] == earlier
@@ -129,8 +133,9 @@ def test_new_lifespan_is_added_after_earlier_ones(frozen_today, history_file):
 def test_lifespan_is_recorded_only_once(frozen_today, history_file):
     _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20"}})
 
-    update_battery_history({SERIAL: "NORMAL"})
-    history = update_battery_history({SERIAL: "NORMAL"})
+    mark_battery_replaced(SERIAL)
+    mark_battery_replaced(SERIAL)
+    history = load_battery_history()
 
     assert len(history[SERIAL]["past_batteries"]) == 1
 
@@ -147,7 +152,7 @@ def test_past_batteries_survive_going_low(frozen_today, history_file):
 def test_past_batteries_are_written_to_disk(frozen_today, history_file):
     _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20"}})
 
-    update_battery_history({SERIAL: "NORMAL"})
+    mark_battery_replaced(SERIAL)
 
     assert load_battery_history()[SERIAL]["past_batteries"][0]["days"] == 111
 
@@ -156,7 +161,8 @@ def test_no_lifespan_without_a_fitted_date(frozen_today, history_file):
     """First seen already LOW: there is nothing to measure from."""
     _write(history_file, {SERIAL: {"good_since": None, "low_since": "2026-08-20"}})
 
-    history = update_battery_history({SERIAL: "NORMAL"})
+    mark_battery_replaced(SERIAL)
+    history = load_battery_history()
 
     assert "past_batteries" not in history[SERIAL]
 
@@ -164,10 +170,93 @@ def test_no_lifespan_without_a_fitted_date(frozen_today, history_file):
 def test_no_lifespan_from_an_unparseable_date(frozen_today, history_file):
     _write(history_file, {SERIAL: {"good_since": "not-a-date", "low_since": "2026-08-20"}})
 
-    history = update_battery_history({SERIAL: "NORMAL"})
+    mark_battery_replaced(SERIAL)
+    history = load_battery_history()
 
     assert "past_batteries" not in history[SERIAL]
     assert history[SERIAL]["good_since"] == "2026-08-25"
+
+
+# --- batteries dying after going low ---------------------------------------
+
+
+def test_low_device_going_offline_records_when_it_died(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20"}})
+
+    history = update_battery_history({SERIAL: "LOW"}, disconnected={SERIAL})
+
+    assert history[SERIAL]["died"] == "2026-08-25"
+
+
+def test_first_date_seen_dead_is_kept(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "died": "2026-08-22"}})
+
+    history = update_battery_history({SERIAL: "LOW"}, disconnected={SERIAL})
+
+    assert history[SERIAL]["died"] == "2026-08-22"
+
+
+def test_low_device_coming_back_online_was_not_dead(frozen_today, history_file):
+    """A brief network drop mustn't count as the battery dying."""
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "died": "2026-08-22"}})
+
+    history = update_battery_history({SERIAL: "LOW"})
+
+    assert "died" not in history[SERIAL]
+
+
+def test_normal_device_going_offline_is_not_dead(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
+
+    history = update_battery_history({SERIAL: "NORMAL"}, disconnected={SERIAL})
+
+    assert "died" not in history[SERIAL]
+
+
+def test_replacing_a_dead_battery_keeps_when_it_died(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "died": "2026-08-22"}})
+
+    mark_battery_replaced(SERIAL)
+    history = load_battery_history()
+
+    assert history[SERIAL]["past_batteries"][0]["died"] == "2026-08-22"
+    assert "died" not in history[SERIAL]
+
+
+# --- marking a battery as replaced ----------------------------------------
+
+
+def test_marking_replaced_restarts_the_clock(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20"}})
+
+    mark_battery_replaced(SERIAL)
+
+    entry = load_battery_history()[SERIAL]
+    assert entry["good_since"] == "2026-08-25"
+    assert entry["low_since"] is None
+
+
+def test_replacing_a_battery_that_never_went_low_saves_no_lifespan(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
+
+    assert mark_battery_replaced(SERIAL) is None
+
+    entry = load_battery_history()[SERIAL]
+    assert entry == {"good_since": "2026-08-25", "low_since": None}
+
+
+def test_marking_an_unknown_device_is_refused(frozen_today, history_file):
+    with pytest.raises(KeyError):
+        mark_battery_replaced(SERIAL)
+
+
+def test_low_reading_on_the_day_of_fitting_is_ignored(frozen_today, history_file):
+    """Tado can still report the old state just after a swap."""
+    _write(history_file, {SERIAL: {"good_since": "2026-08-25", "low_since": None}})
+
+    history = update_battery_history({SERIAL: "LOW"})
+
+    assert history[SERIAL]["low_since"] is None
 
 
 # --- persistence ----------------------------------------------------------
