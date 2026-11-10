@@ -346,6 +346,17 @@ def test_replaced_command_saves_the_lifespan(frozen_today, history_file):
     assert json.loads(history_file.read_text())["devices"]["VA1"]["past_batteries"][0]["days"] == 111
 
 
+def test_damaged_history_stops_the_report_with_a_clear_message(frozen_today, history_file, monkeypatch):
+    history_file.write_text("{ not json at all")
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_command)
+
+    assert result.exit_code != 0
+    assert "damaged" in result.output
+    assert isinstance(result.exception, SystemExit)  # a clean exit, not a traceback
+
+
 def test_replaced_command_refuses_an_unknown_serial(frozen_today, history_file):
     result = CliRunner().invoke(battery_mod.battery_replaced_command, ["NOPE"])
 

@@ -5,7 +5,10 @@ Stored in stored_data/ directory, gitignored.
 
 import json
 import os
+import shutil
 from datetime import date
+
+import click
 
 STORED_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "stored_data")
 BATTERY_HISTORY_FILE = os.path.join(STORED_DATA_DIR, "battery_history.json")
@@ -15,18 +18,34 @@ BATTERY_HISTORY_FILE = os.path.join(STORED_DATA_DIR, "battery_history.json")
 TRACKING_STARTED = "2026-04-17"
 
 
+class BatteryHistoryError(click.ClickException):
+    """The history file can't be read. Carrying on would overwrite it."""
+
+
 def _load_json(path: str) -> dict:
     try:
         with open(path) as f:
             return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError:
         return {}
+    except ValueError as error:  # bad JSON, or bytes that aren't text
+        raise BatteryHistoryError(
+            f"{path} is damaged, so nothing has been changed. "
+            f"Restore it from {path}.bak or your own backup. ({error})"
+        ) from error
 
 
 def _save_json(path: str, data: dict) -> None:
+    """Save so that a failure part-way leaves the file intact, keeping the last version as .bak."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
+    temporary = f"{path}.tmp"
+    with open(temporary, "w") as f:
         json.dump(data, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    if os.path.exists(path):
+        shutil.copy2(path, f"{path}.bak")
+    os.replace(temporary, path)
 
 
 def _migrate_entry(entry: dict) -> dict:
