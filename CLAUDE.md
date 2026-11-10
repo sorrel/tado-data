@@ -68,7 +68,7 @@ What follows from this:
 - A saved lifespan is the time to the **first low warning**, not the total life of the batteries. `On low` in `battery-history` is what shows how much further they went.
 - `LOW` going back to `NORMAL` is **not** evidence of a replacement, because the same batteries may have gone back in. The code must never infer a replacement; only `battery-replaced` records one.
 - Do not run `battery` while batteries are out of a low device: it will look offline and be recorded as having died.
-- The same valve went back to `NORMAL` once the batteries were refitted, so each spell of `LOW` is kept in `low_periods` (`from`, `to`; `to` is null while still low). `low_since` stays as the first warning. `battery-history` lists them.
+- The same valve went back to `NORMAL` once the batteries were refitted, so each spell of `LOW` is kept in `low_periods` (`from`, `to`; `to` is null while still low). `low_since` stays as the first warning. `battery` shows the first, the latest and how many (for the batteries now fitted, in red only while still low), and `battery-history` lists them all.
 
 ### Zone Control & Heating Circuits
 
