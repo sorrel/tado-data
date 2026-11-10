@@ -124,6 +124,44 @@ def test_report_shows_the_last_lifespan_after_a_replacement(frozen_today, histor
     assert "111d" in result.output
 
 
+# --- first low, latest low and how many -------------------------------------
+
+
+TWO_SPELLS = [{"from": "2026-08-20", "to": "2026-08-21"}, {"from": "2026-08-24", "to": None}]
+
+
+def test_format_lows_shows_first_latest_and_count():
+    assert click.unstyle(battery_mod._format_lows(TWO_SPELLS, is_low=True)) == "2026-08-20  2026-08-24     2"
+
+
+def test_format_lows_is_blank_for_a_device_never_low():
+    assert click.unstyle(battery_mod._format_lows([], is_low=False)) == " " * 28
+
+
+def test_format_lows_is_red_only_while_the_device_is_low():
+    closed = [{"from": "2026-08-20", "to": "2026-08-21"}]
+
+    assert "\x1b[31m" in battery_mod._format_lows(closed, is_low=True)
+    assert "\x1b[" not in battery_mod._format_lows(closed, is_low=False)
+
+
+def test_report_shows_low_history_for_a_device_now_normal(frozen_today, history_file, monkeypatch):
+    history_file.write_text(json.dumps({"devices": {"VA1": {
+        "good_since": "2026-05-01",
+        "low_since": "2026-08-20",
+        "low_periods": [{"from": "2026-08-20", "to": "2026-08-21"}, {"from": "2026-08-24", "to": "2026-08-24"}],
+    }}}))
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_command)
+
+    assert result.exit_code == 0
+    assert "First low" in result.output
+    assert "Latest low" in result.output
+    assert "Low since" not in result.output
+    assert "2026-08-20  2026-08-24     2" in result.output
+
+
 # --- average lifespan -----------------------------------------------------
 
 

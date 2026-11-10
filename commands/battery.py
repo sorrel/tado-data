@@ -42,6 +42,14 @@ def _format_last(past_batteries: list[dict]) -> str:
     return click.style(f"{label:>6}", fg=_age_colour(last["days"]), bold=True)
 
 
+def _format_lows(periods: list[dict], is_low: bool) -> str:
+    """Format the first low warning, the latest and how many; red only while still low."""
+    if not periods:
+        return " " * 28
+    text = f"{periods[0]['from']:<10}  {periods[-1]['from']:<10}  {len(periods):>4}"
+    return click.style(text, fg="red") if is_low else text
+
+
 def _average_days(lifespans: list[dict]) -> int | None:
     """Average the measured lifespans, leaving out unknown-age minimums."""
     measured = [b["days"] for b in lifespans if not b.get("minimum")]
@@ -126,7 +134,7 @@ def battery_command(room):
     for d in battery_devices:
         entry = history.get(d["serial"], {})
         d["good_since"] = entry.get("good_since")
-        d["low_since"] = entry.get("low_since")
+        d["low_periods"] = entry.get("low_periods", [])
         d["past_batteries"] = entry.get("past_batteries", [])
 
     # Sort by zone, then device type
@@ -146,7 +154,9 @@ def battery_command(room):
         f"{'Good since':<10}  "
         f"{'Age':>6}  "
         f"{'Last':>6}  "
-        f"{'Low since':<10}  "
+        f"{'First low':<10}  "
+        f"{'Latest low':<10}  "
+        f"{'Lows':>4}  "
         f"{'Connected':>9}"
     )
     click.echo()
@@ -162,7 +172,7 @@ def battery_command(room):
             good_str = click.style(f"{'N/A':<10}", fg="bright_black")
             age_str = click.style(f"{'N/A':>6}", fg="bright_black")
             last_str = click.style(f"{'N/A':>6}", fg="bright_black")
-            low_str = click.style(f"{'N/A':<10}", fg="bright_black")
+            low_str = click.style(f"{'N/A':<10}  {'N/A':<10}  {'N/A':>4}", fg="bright_black")
             conn_str = (
                 click.style(f"{'Yes':>9}", fg="green")
                 if d["connection"]
@@ -195,12 +205,7 @@ def battery_command(room):
 
         last_str = _format_last(d["past_batteries"])
 
-        # Low since — red if set, blank otherwise
-        low_since = d["low_since"] or ""
-        if low_since:
-            low_str = click.style(f"{low_since:<10}", fg="red")
-        else:
-            low_str = f"{'':<10}"
+        low_str = _format_lows(d["low_periods"], d["battery"] == "LOW")
 
         # Colour connection status
         connected = d["connection"]
