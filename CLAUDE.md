@@ -57,6 +57,7 @@ OAuth2 Device Code Grant flow (required by Tado since March 2025):
 - Absent on mains-powered devices (gateway, boiler unit)
 - `battery-replaced SERIAL` is the only thing that marks a battery as replaced. Its lifespan (fitting to first low warning) is then kept permanently in that device's `past_batteries` in `stored_data/battery_history.json`
 - Tracking began on 2026-04-17, so batteries dated then are of unknown age: their lifespans are saved with `minimum: true` and shown as, for example, `≥206d`
+- `stored_data/` is local only and cannot be rebuilt from Tado, so saves are atomic and each one keeps the previous version as `battery_history.json.bak`. A damaged file stops the command with an error; it must never be treated as empty, or the next save would overwrite the real history
 - A LOW device that goes offline is taken to have died: the first date seen is kept as `died`, and cleared if the device comes back online. `battery-history` shows days on low, as a minimum if the battery was replaced before dying
 
 ### Known Issue: Tado's LOW Warning Is Not the End of the Battery

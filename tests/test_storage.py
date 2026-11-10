@@ -10,7 +10,13 @@ import json
 
 import pytest
 
-from core.storage import load_battery_history, mark_battery_replaced, update_battery_history
+from core.storage import (
+    BatteryHistoryError,
+    _save_json,
+    load_battery_history,
+    mark_battery_replaced,
+    update_battery_history,
+)
 
 SERIAL = "VA1234567890"
 
@@ -369,8 +375,61 @@ def test_missing_file_returns_empty_history(frozen_today, history_file):
     assert load_battery_history() == {}
 
 
-def test_corrupt_file_returns_empty_history(frozen_today, history_file):
-    history_file.parent.mkdir(parents=True, exist_ok=True)
+@pytest.mark.parametrize("damaged", [b"", b'{"devices": {"VA12', b"\xff\xfe not text"])
+def test_damaged_file_is_refused_and_left_alone(frozen_today, history_file, damaged):
+    """Treating it as empty would overwrite the real history on the next save."""
+    history_file.write_bytes(damaged)
+
+    with pytest.raises(BatteryHistoryError):
+        update_battery_history({SERIAL: "NORMAL"})
+
+    assert history_file.read_bytes() == damaged
+
+
+def test_marking_replaced_is_refused_on_a_damaged_file(frozen_today, history_file):
     history_file.write_text("{ not json at all")
 
-    assert load_battery_history() == {}
+    with pytest.raises(BatteryHistoryError):
+        mark_battery_replaced(SERIAL)
+
+
+# --- saving safely ---------------------------------------------------------
+
+
+def test_interrupted_save_leaves_the_file_intact(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
+    before = history_file.read_text()
+
+    # json.dump writes as it goes, so this fails part-way through the save
+    with pytest.raises(TypeError):
+        _save_json(str(history_file), {"devices": {SERIAL: object()}})
+
+    assert history_file.read_text() == before
+
+
+def test_a_change_keeps_the_previous_version_as_a_backup(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
+    before = history_file.read_text()
+
+    update_battery_history({SERIAL: "LOW"})
+
+    assert history_file.read_text() != before
+    assert (history_file.parent / "battery_history.json.bak").read_text() == before
+
+
+def test_a_run_with_no_change_leaves_the_backup_alone(frozen_today, history_file):
+    """Otherwise the backup would soon just be a copy of the current file."""
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
+    backup = history_file.parent / "battery_history.json.bak"
+    backup.write_text("the previous version")
+
+    update_battery_history({SERIAL: "NORMAL"})
+
+    assert backup.read_text() == "the previous version"
+
+
+def test_first_ever_save_has_nothing_to_back_up(frozen_today, history_file):
+    update_battery_history({SERIAL: "NORMAL"})
+
+    assert history_file.exists()
+    assert not (history_file.parent / "battery_history.json.bak").exists()
