@@ -13,6 +13,7 @@ import pytest
 from core.storage import (
     BatteryHistoryError,
     _save_json,
+    add_meter_reading,
     load_battery_history,
     mark_battery_replaced,
     update_battery_history,
@@ -433,3 +434,62 @@ def test_first_ever_save_has_nothing_to_back_up(frozen_today, history_file):
 
     assert history_file.exists()
     assert not (history_file.parent / "battery_history.json.bak").exists()
+
+
+# --- meter readings -------------------------------------------------------
+
+
+def test_a_meter_reading_is_saved_against_the_batteries_now_fitted(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20"}})
+
+    reading = add_meter_reading(SERIAL, [30, 40], note="left in")
+
+    assert reading == {"date": "2026-08-25", "percent": [30, 40], "note": "left in"}
+    assert load_battery_history()[SERIAL]["meter_readings"] == [reading]
+
+
+def test_a_meter_reading_can_be_backdated_and_needs_no_note(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
+
+    reading = add_meter_reading(SERIAL, [90, 90], on="2026-08-20")
+
+    assert reading == {"date": "2026-08-20", "percent": [90, 90]}
+
+
+def test_meter_readings_are_kept_in_date_order(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
+
+    add_meter_reading(SERIAL, [50, 50])
+    add_meter_reading(SERIAL, [90, 90], on="2026-08-01")
+
+    dates = [r["date"] for r in load_battery_history()[SERIAL]["meter_readings"]]
+    assert dates == ["2026-08-01", "2026-08-25"]
+
+
+def test_a_meter_reading_for_an_unknown_device_is_refused(frozen_today, history_file):
+    _write(history_file, {})
+
+    with pytest.raises(KeyError):
+        add_meter_reading(SERIAL, [30, 40])
+
+
+def test_meter_readings_survive_a_battery_report(frozen_today, history_file):
+    """The report rebuilds each entry, so it must carry the readings across."""
+    readings = [{"date": "2026-08-20", "percent": [30, 40]}]
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "meter_readings": readings}})
+
+    update_battery_history({SERIAL: "NORMAL"})
+    update_battery_history({SERIAL: "LOW"})
+
+    assert load_battery_history()[SERIAL]["meter_readings"] == readings
+
+
+def test_replacing_a_battery_keeps_its_meter_readings(frozen_today, history_file):
+    readings = [{"date": "2026-08-20", "percent": [30, 40]}]
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "meter_readings": readings}})
+
+    mark_battery_replaced(SERIAL)
+
+    entry = load_battery_history()[SERIAL]
+    assert entry["past_batteries"][0]["meter_readings"] == readings
+    assert "meter_readings" not in entry

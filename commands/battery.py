@@ -7,7 +7,7 @@ from datetime import date
 import click
 
 from core.client import TadoClient
-from core.storage import load_battery_history, mark_battery_replaced, update_battery_history
+from core.storage import add_meter_reading, load_battery_history, mark_battery_replaced, update_battery_history
 
 # Colour bands for battery age, one per 100 days. Bright colours for a black background.
 AGE_BANDS = ["bright_green", "bright_cyan", "bright_yellow", "bright_magenta", "bright_red"]
@@ -265,6 +265,50 @@ def battery_replaced_command(serial):
         click.echo(f"{serial} marked as replaced. The old set had no recorded low warning, so no lifespan was saved.")
 
 
+def _format_percents(percents: list[int]) -> str:
+    return ", ".join(f"{p}%" for p in percents)
+
+
+@click.command("battery-reading")
+@click.argument("serial")
+@click.argument("percents", nargs=-1, required=True, type=click.IntRange(0, 100))
+@click.option("--date", "on", type=click.DateTime(formats=["%Y-%m-%d"]), help="Day of the reading (YYYY-MM-DD). Defaults to today.")
+@click.option("--note", help="Anything worth keeping, such as whether the batteries went back in.")
+def battery_reading_command(serial, percents, on, note):
+    """Record a battery meter's reading, one PERCENT per cell, for device SERIAL."""
+    serial = serial.upper()
+    if on and on.date() > date.today():
+        raise click.BadParameter("can't be in the future.", param_hint="--date")
+    try:
+        reading = add_meter_reading(serial, list(percents), on=on.date().isoformat() if on else None, note=note)
+    except KeyError:
+        raise click.ClickException(f"No battery history for {serial}.")
+    click.echo(f"{serial}: {_format_percents(reading['percent'])} recorded for {reading['date']}.")
+
+
+def _print_meter_readings(readings: list[tuple[str, dict]], device_zones: dict) -> None:
+    """Print every battery meter reading taken, oldest first."""
+    rows = sorted(
+        ((device_zones.get(serial, "Unassigned"), serial, reading) for serial, reading in readings),
+        key=lambda row: (row[2]["date"], row[0]),
+    )
+    zone_width = max(len("Zone"), *(len(zone) for zone, _, _ in rows))
+    serial_width = max(len("Serial"), *(len(serial) for _, serial, _ in rows))
+    percents = [_format_percents(reading["percent"]) for _, _, reading in rows]
+    percent_width = max(len("Reading"), *(len(p) for p in percents))
+
+    header = f"  {'Zone':<{zone_width}}  {'Serial':<{serial_width}}  {'Date':<10}  {'Reading':<{percent_width}}  Note"
+    click.echo(click.style("  Meter readings", fg="bright_white", bold=True))
+    click.echo(click.style(header, fg="bright_white", bold=True))
+    click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
+    for (zone, serial, reading), percent in zip(rows, percents):
+        click.echo(
+            f"  {zone:<{zone_width}}  {serial:<{serial_width}}  {reading['date']:<10}  "
+            f"{percent:<{percent_width}}  {reading.get('note', '')}".rstrip()
+        )
+    click.echo()
+
+
 def _print_lifespans(lifespans: list[tuple[str, dict]], device_zones: dict) -> None:
     """Print the table of replaced batteries and their averages."""
     rows = sorted(
@@ -366,8 +410,10 @@ def battery_history_command():
     ]
     lows = [(serial, period) for serial, entry in history.items() for period in entry.get("low_periods", [])]
     lows += [(serial, period) for serial, battery in lifespans for period in battery.get("low_periods", [])]
+    readings = [(serial, r) for serial, entry in history.items() for r in entry.get("meter_readings", [])]
+    readings += [(serial, r) for serial, battery in lifespans for r in battery.get("meter_readings", [])]
 
-    if not lifespans and not lows:
+    if not lifespans and not lows and not readings:
         click.echo("No replaced batteries recorded yet.")
         return
 
@@ -379,3 +425,5 @@ def battery_history_command():
         _print_lifespans(lifespans, device_zones)
     if lows:
         _print_low_periods(lows, device_zones)
+    if readings:
+        _print_meter_readings(readings, device_zones)

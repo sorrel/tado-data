@@ -404,3 +404,77 @@ def test_zone_with_no_devices_contributes_nothing():
 def test_returns_empty_map_when_zones_unavailable(zones):
     """get_zones() returns None when the API call fails."""
     assert _get_device_zone_map(FakeClient(zones)) == {}
+
+
+# --- meter readings ---------------------------------------------------------
+
+
+def test_reading_command_saves_a_reading(frozen_today, history_file):
+    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": "2026-08-20"}}}))
+
+    result = CliRunner().invoke(battery_mod.battery_reading_command, ["va1", "30", "40", "--note", "left in"])
+
+    assert result.exit_code == 0, result.output
+    saved = json.loads(history_file.read_text())["devices"]["VA1"]["meter_readings"]
+    assert saved == [{"date": "2026-08-25", "percent": [30, 40], "note": "left in"}]
+    assert "30%, 40%" in result.output
+
+
+def test_reading_command_takes_an_earlier_date(frozen_today, history_file):
+    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}}))
+
+    result = CliRunner().invoke(battery_mod.battery_reading_command, ["VA1", "90", "90", "--date", "2026-08-20"])
+
+    assert result.exit_code == 0, result.output
+    saved = json.loads(history_file.read_text())["devices"]["VA1"]["meter_readings"]
+    assert saved[0]["date"] == "2026-08-20"
+
+
+@pytest.mark.parametrize("args", [["VA1"], ["VA1", "101"], ["VA1", "-1"], ["VA1", "50", "--date", "2026-08-26"]])
+def test_reading_command_refuses_bad_input(frozen_today, history_file, args):
+    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}}))
+
+    result = CliRunner().invoke(battery_mod.battery_reading_command, args)
+
+    assert result.exit_code != 0
+    assert "meter_readings" not in history_file.read_text()
+
+
+def test_reading_command_refuses_an_unknown_device(frozen_today, history_file):
+    history_file.write_text(json.dumps({"devices": {}}))
+
+    result = CliRunner().invoke(battery_mod.battery_reading_command, ["VA9", "30"])
+
+    assert result.exit_code != 0
+    assert "No battery history for VA9" in result.output
+
+
+def test_history_lists_meter_readings_now_and_from_replaced_batteries(frozen_today, history_file, monkeypatch):
+    history_file.write_text(json.dumps({"devices": {"VA1": {
+        "good_since": "2026-05-01",
+        "low_since": None,
+        "meter_readings": [{"date": "2026-08-24", "percent": [30, 40], "note": "left in"}],
+        "past_batteries": [{**_past("2026-04-19", 204), "meter_readings": [{"date": "2026-07-01", "percent": [90, 90]}]}],
+    }}}))
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    assert "Meter readings" in result.output
+    assert "30%, 40%" in result.output
+    assert "left in" in result.output
+    assert "90%, 90%" in result.output
+
+
+def test_history_shows_meter_readings_on_their_own(frozen_today, history_file, monkeypatch):
+    history_file.write_text(json.dumps({"devices": {"VA1": {
+        "good_since": "2026-05-01",
+        "low_since": None,
+        "meter_readings": [{"date": "2026-08-24", "percent": [70]}],
+    }}}))
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    assert "70%" in result.output
+    assert "No replaced batteries" not in result.output
