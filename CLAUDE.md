@@ -23,6 +23,7 @@ uv run python tado.py auth        # Authenticate (opens browser)
 uv run python tado.py battery     # Battery status report
 uv run python tado.py battery-history  # Every replaced battery and the average lifespan
 uv run python tado.py battery-replaced SERIAL  # Record that you replaced a device's batteries
+uv run python tado.py battery-reading SERIAL 30 40 [--date YYYY-MM-DD] [--note TEXT]  # Record a battery meter reading, one % per cell
 uv run python tado.py status      # Home info and device counts
 ```
 
@@ -58,11 +59,16 @@ OAuth2 Device Code Grant flow (required by Tado since March 2025):
 - `battery-replaced SERIAL` is the only thing that marks a battery as replaced. Its lifespan (fitting to first low warning) is then kept permanently in that device's `past_batteries` in `stored_data/battery_history.json`
 - Tracking began on 2026-04-17, so batteries dated then are of unknown age: their lifespans are saved with `minimum: true` and shown as, for example, `≥206d`
 - `stored_data/` is local only and cannot be rebuilt from Tado, so saves are atomic and each one keeps the previous version as `battery_history.json.bak`. A damaged file stops the command with an error; it must never be treated as empty, or the next save would overwrite the real history
+- `battery-reading` keeps what a battery meter said, one percentage per cell, in `meter_readings` (`date`, `percent`, optional `note`). Like `low_periods`, it belongs to the batteries now fitted: every save must carry it across, and `battery-replaced` moves it into that battery's record in `past_batteries`. `battery-history` lists every reading
 - A LOW device that goes offline is taken to have died: the first date seen is kept as `died`, and cleared if the device comes back online. `battery-history` shows days on low, as a minimum if the battery was replaced before dying
 
 ### Known Issue: Tado's LOW Warning Is Not the End of the Battery
 
 On 9 November 2026, valve `VA0149052928` reported `LOW` after 204 days. Its two non-rechargeable batteries were taken out, both measured 90% on a charge meter, and they were put back in. Batteries reading 10% have also been seen to work well, so the meter's percentage does not reliably match what the valve reacts to.
+
+On 11 November 2026, the hall valve `VA2062453504` reported `LOW` with batteries measuring 30% and 40%; they were left in. Both readings are recorded with `battery-reading`. Both cases point to the same thing: Tado warns early, leaving a long window to change the batteries.
+
+The likeliest explanation (not confirmed) is voltage under load. A charge meter applies a light load, but the valve probably measures while its motor is running, when a part-used alkaline cell sags much further. Two things make that sag worse: dirty or loose contacts (taking the batteries out and refitting them wipes the contacts, which may be why `VA0149052928` went back to `NORMAL`) and cold weather.
 
 What follows from this:
 
@@ -70,6 +76,10 @@ What follows from this:
 - `LOW` going back to `NORMAL` is **not** evidence of a replacement, because the same batteries may have gone back in. The code must never infer a replacement; only `battery-replaced` records one.
 - Do not run `battery` while batteries are out of a low device: it will look offline and be recorded as having died.
 - The same valve went back to `NORMAL` once the batteries were refitted, so each spell of `LOW` is kept in `low_periods` (`from`, `to`; `to` is null while still low). `low_since` stays as the first warning. `battery` shows the first, the latest and how many (for the batteries now fitted, in red only while still low), and `battery-history` lists them all.
+
+### Known Issue: Battery Status Says Nothing About Whether the Valve Works
+
+In November 2026 the mechanical adaptor between the downstairs loo valve and its radiator was failing. The valve's motor ran as normal but could not close the radiator, so the radiator stayed hot whatever Tado asked for. Tado raised no warning, and the battery stayed `NORMAL`. Once the adaptor was put right, the radiator went cold when it should. The sign of this fault is in the data rather than the device status: a room that stays well above its set temperature while Tado asks that zone for no heat.
 
 ### Zone Control & Heating Circuits
 

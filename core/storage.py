@@ -101,8 +101,9 @@ def mark_battery_replaced(serial: str) -> dict | None:
     if entry.get("good_since") and entry.get("low_since"):
         retired = _retired_battery(entry["good_since"], entry["low_since"], today, entry.get("died"))
     if retired:
-        if entry.get("low_periods"):
-            retired["low_periods"] = entry["low_periods"]
+        for key in ("low_periods", "meter_readings"):
+            if entry.get(key):
+                retired[key] = entry[key]
         past.append(retired)
 
     new_entry = {"good_since": today, "low_since": None}
@@ -111,6 +112,25 @@ def mark_battery_replaced(serial: str) -> dict | None:
     history[serial] = new_entry
     _save_json(BATTERY_HISTORY_FILE, {"devices": history})
     return retired
+
+
+def add_meter_reading(serial: str, percents: list[int], on: str | None = None, note: str | None = None) -> dict:
+    """
+    Record what a battery meter said about the cells now in device SERIAL.
+
+    One percentage per cell. Tado only reports NORMAL or LOW, so these are the
+    only measure of how much charge was really left when it warned.
+    Raises KeyError if the device has no history.
+    """
+    history = load_battery_history()
+    entry = history[serial]
+    reading = {"date": on or date.today().isoformat(), "percent": list(percents)}
+    if note:
+        reading["note"] = note
+    readings = sorted([*entry.get("meter_readings", []), reading], key=lambda r: r["date"])
+    history[serial] = {**entry, "meter_readings": readings}
+    _save_json(BATTERY_HISTORY_FILE, {"devices": history})
+    return reading
 
 
 def update_battery_history(current_states: dict[str, str], disconnected: set[str] | None = None) -> dict:
@@ -170,6 +190,8 @@ def update_battery_history(current_states: dict[str, str], disconnected: set[str
             new_entry["died"] = new_died
         if periods:
             new_entry["low_periods"] = periods
+        if entry.get("meter_readings"):
+            new_entry["meter_readings"] = entry["meter_readings"]
         if past:
             new_entry["past_batteries"] = past
         if new_entry != entry:
