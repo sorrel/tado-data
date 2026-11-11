@@ -41,6 +41,8 @@ wheels/
 
 # Auth tokens (saved locally, never committed)
 tokens.json
+tokens.json.tmp
+tokens.json.lock
 
 # Cache
 cache/
