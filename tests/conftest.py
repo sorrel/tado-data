@@ -47,3 +47,30 @@ def history_file(tmp_path, monkeypatch):
     path = tmp_path / "battery_history.json"
     monkeypatch.setattr(storage_mod, "BATTERY_HISTORY_FILE", str(path))
     return path
+
+
+@pytest.fixture
+def token_file(tmp_path, monkeypatch):
+    """Redirect tokens.json and its lock into a temp directory.
+
+    Guards the real login from the test run.
+    """
+    import core.auth as auth_mod
+
+    path = tmp_path / "tokens.json"
+    monkeypatch.setattr(auth_mod, "TOKEN_FILE", path)
+    monkeypatch.setattr(auth_mod, "TOKEN_LOCK_FILE", tmp_path / "tokens.json.lock", raising=False)
+    return path
+
+
+@pytest.fixture
+def heat_store_dir(tmp_path, monkeypatch):
+    """Redirect heat-check day reports and state into a temp directory.
+
+    Guards the real stored_data/ from the test run.
+    """
+    import core.heat_store as heat_store_mod
+
+    monkeypatch.setattr(heat_store_mod, "DAY_REPORTS_DIR", str(tmp_path / "day_reports"))
+    monkeypatch.setattr(heat_store_mod, "HEAT_STATE_FILE", str(tmp_path / "heat_check.json"))
+    return tmp_path

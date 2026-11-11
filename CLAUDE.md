@@ -25,6 +25,7 @@ uv run python tado.py battery-history  # Every replaced battery and the average 
 uv run python tado.py battery-replaced SERIAL  # Record that you replaced a device's batteries
 uv run python tado.py battery-reading SERIAL 30 40 [--date YYYY-MM-DD] [--note TEXT]  # Record a battery meter reading, one % per cell
 uv run python tado.py status      # Home info and device counts
+uv run python tado.py heat-check [--date YYYY-MM-DD]  # Rooms that warmed with no call for heat, and offline valves (default: yesterday)
 ```
 
 `tools/completion.zsh`, sourced from `~/.zshrc`, adds a `tado` shell command with tab completion that works from any directory. It's bound to `tado` because football-stats already holds the completion for `uv`.
@@ -39,6 +40,8 @@ OAuth2 Device Code Grant flow (required by Tado since March 2025):
 3. Script polls for token
 4. Access token (~10 min lifetime) and refresh token saved to `tokens.json`
 5. Refresh token rotation — old token invalidated on each refresh, new one persisted
+6. `tokens.json` is saved atomically, and each refresh holds `tokens.json.lock` (waiting up to 5 seconds), so a manual run and the scheduled heat check can't rotate the token at the same moment and lose the login
+7. `get_access_token()` raises `LoginNeeded`, `AuthNetworkError` (Tado's login server unreachable or failing; the login may be fine) or `TokenLockBusy`. `connect(interactive=False)` never starts the browser login; it raises instead
 
 **Public client ID:** `1bb50063-6b0c-4d11-bd99-387f4a91cc46`
 
@@ -79,7 +82,42 @@ What follows from this:
 
 ### Known Issue: Battery Status Says Nothing About Whether the Valve Works
 
-In November 2026 the mechanical adaptor between the downstairs loo valve and its radiator was failing. The valve's motor ran as normal but could not close the radiator, so the radiator stayed hot whatever Tado asked for. Tado raised no warning, and the battery stayed `NORMAL`. Once the adaptor was put right, the radiator went cold when it should. The sign of this fault is in the data rather than the device status: a room that stays well above its set temperature while Tado asks that zone for no heat.
+In November 2026 the mechanical adaptor between the downstairs loo valve and its radiator was failing. The valve's motor ran as normal but could not close the radiator, so the radiator stayed hot whatever Tado asked for. Tado raised no warning, and the battery stayed `NORMAL`. Once the adaptor was put right, the radiator went cold when it should. The sign of this fault is in the data rather than the device status: a room that keeps warming while Tado asks that zone for no heat. `heat-check` (below) now looks for it every morning.
+
+### Heat Check
+
+`heat-check` reads each heating zone's day report
+(`GET /homes/{homeId}/zones/{zoneId}/dayReport?date=YYYY-MM-DD`, about every
+15 minutes) and reports two kinds of fault (design:
+`docs/superpowers/specs/2026-11-11-heat-check-design.md`):
+
+- **Warming:** the room rose 2.0° or more during a spell with no call for heat,
+  ignoring the first 30 minutes after a call ends. This is a valve that can't
+  close, as the Downstairs Loo's couldn't in November 2026. Being above the set
+  point isn't enough on its own; sun or a warm neighbour can do that.
+- **Offline:** the zone's measuring device was out of contact for an hour or
+  more in total during the day.
+
+Days are UK local days (`Europe/London`). Fetched reports are kept in
+`stored_data/day_reports/<date>/<zoneId>.json`, so no day is fetched twice;
+today's report is never fetched or saved.
+
+`heat-check --scheduled` runs from launchd at 07:00, and again at 10:00,
+13:00, 16:00, 19:00 and 22:00 so a Mac switched on late still gets checked;
+once a day is checked, later runs make no requests (install with
+`tools/install-heat-check.sh`, which sends a test notification; log in
+`~/Library/Logs/tado-heat-check.log`). It deliberately doesn't run at login,
+when the network may not be up yet.
+It checks every day since the last check, up to 7 days back, and records
+progress and known faults in `stored_data/heat_check.json`. It notifies on
+this Mac only for a new fault, a known one again once a week, a cleared one,
+or the check failing (expired login, network, Tado error, damaged file,
+unexpected error, or Tado listing no heating zones). Anything that fails
+inside the check notifies; the one silent case is the job never starting at
+all (Mac off all day, or `uv` moved), and the log shows when it last ran.
+Notifications may need allowing under Script Editor in System Settings →
+Notifications. The account has Auto-Assist, so about 20,000 requests a day;
+a checked day costs about 19.
 
 ### Zone Control & Heating Circuits
 
@@ -105,6 +143,13 @@ In November 2026 the mechanical adaptor between the downstairs loo valve and its
 - `core/client.py` — TadoClient class for API requests
 - `commands/setup.py` — auth, logout, status commands + ColouredGroup
 - `commands/battery.py` — Battery reporting command
+- `commands/heat_check.py` — heat-check command and its scheduled run
+- `core/heat_detect.py` — finds warming and offline faults in a day report (pure)
+- `core/heat_alerts.py` — decides which faults to notify: new, weekly, cleared (pure)
+- `core/heat_store.py` — saved day reports and heat-check state in `stored_data/`
+- `core/notify.py` — macOS notifications through `osascript`
+- `tools/heat-check.plist.template`, `tools/install-heat-check.sh` — the 07:00 launchd schedule
+- `tests/fixtures/dayreport_fault.json` — the real 10 November 2026 loo report, weather removed
 - `tokens.json` — Saved auth tokens (gitignored)
 - `tests/` — pytest suite (pure logic only; never hits the API)
 

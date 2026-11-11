@@ -1,0 +1,914 @@
+{
+  "zoneType": "HEATING",
+  "interval": {
+    "from": "2026-11-09T23:45:00.000Z",
+    "to": "2026-11-11T00:15:00.000Z"
+  },
+  "hoursInDay": 24,
+  "measuredData": {
+    "measuringDeviceConnected": {
+      "timeSeriesType": "dataIntervals",
+      "valueType": "boolean",
+      "dataIntervals": [
+        {
+          "from": "2026-11-09T23:45:00.000Z",
+          "to": "2026-11-10T19:35:55.000Z",
+          "value": true
+        },
+        {
+          "from": "2026-11-10T19:35:55.000Z",
+          "to": "2026-11-11T00:15:00.000Z",
+          "value": false
+        }
+      ]
+    },
+    "insideTemperature": {
+      "timeSeriesType": "dataPoints",
+      "valueType": "temperature",
+      "min": {
+        "celsius": 15.16,
+        "fahrenheit": 59.29
+      },
+      "max": {
+        "celsius": 25.18,
+        "fahrenheit": 77.32
+      },
+      "dataPoints": [
+        {
+          "timestamp": "2026-11-09T23:45:00.000Z",
+          "value": {
+            "celsius": 16.01,
+            "fahrenheit": 60.82
+          }
+        },
+        {
+          "timestamp": "2026-11-10T00:00:00.000Z",
+          "value": {
+            "celsius": 15.94,
+            "fahrenheit": 60.69
+          }
+        },
+        {
+          "timestamp": "2026-11-10T00:15:00.000Z",
+          "value": {
+            "celsius": 15.91,
+            "fahrenheit": 60.64
+          }
+        },
+        {
+          "timestamp": "2026-11-10T00:30:00.000Z",
+          "value": {
+            "celsius": 15.83,
+            "fahrenheit": 60.49
+          }
+        },
+        {
+          "timestamp": "2026-11-10T00:45:00.000Z",
+          "value": {
+            "celsius": 15.8,
+            "fahrenheit": 60.44
+          }
+        },
+        {
+          "timestamp": "2026-11-10T01:00:00.000Z",
+          "value": {
+            "celsius": 15.74,
+            "fahrenheit": 60.33
+          }
+        },
+        {
+          "timestamp": "2026-11-10T01:15:00.000Z",
+          "value": {
+            "celsius": 15.74,
+            "fahrenheit": 60.33
+          }
+        },
+        {
+          "timestamp": "2026-11-10T01:30:00.000Z",
+          "value": {
+            "celsius": 15.72,
+            "fahrenheit": 60.3
+          }
+        },
+        {
+          "timestamp": "2026-11-10T01:45:00.000Z",
+          "value": {
+            "celsius": 15.66,
+            "fahrenheit": 60.19
+          }
+        },
+        {
+          "timestamp": "2026-11-10T02:00:00.000Z",
+          "value": {
+            "celsius": 15.59,
+            "fahrenheit": 60.06
+          }
+        },
+        {
+          "timestamp": "2026-11-10T02:15:00.000Z",
+          "value": {
+            "celsius": 15.55,
+            "fahrenheit": 59.99
+          }
+        },
+        {
+          "timestamp": "2026-11-10T02:30:00.000Z",
+          "value": {
+            "celsius": 15.55,
+            "fahrenheit": 59.99
+          }
+        },
+        {
+          "timestamp": "2026-11-10T02:45:00.000Z",
+          "value": {
+            "celsius": 15.5,
+            "fahrenheit": 59.9
+          }
+        },
+        {
+          "timestamp": "2026-11-10T03:00:00.000Z",
+          "value": {
+            "celsius": 15.47,
+            "fahrenheit": 59.85
+          }
+        },
+        {
+          "timestamp": "2026-11-10T03:15:00.000Z",
+          "value": {
+            "celsius": 15.41,
+            "fahrenheit": 59.74
+          }
+        },
+        {
+          "timestamp": "2026-11-10T03:30:00.000Z",
+          "value": {
+            "celsius": 15.37,
+            "fahrenheit": 59.67
+          }
+        },
+        {
+          "timestamp": "2026-11-10T03:45:00.000Z",
+          "value": {
+            "celsius": 15.33,
+            "fahrenheit": 59.59
+          }
+        },
+        {
+          "timestamp": "2026-11-10T04:00:00.000Z",
+          "value": {
+            "celsius": 15.33,
+            "fahrenheit": 59.59
+          }
+        },
+        {
+          "timestamp": "2026-11-10T04:15:00.000Z",
+          "value": {
+            "celsius": 15.3,
+            "fahrenheit": 59.54
+          }
+        },
+        {
+          "timestamp": "2026-11-10T04:30:00.000Z",
+          "value": {
+            "celsius": 15.28,
+            "fahrenheit": 59.5
+          }
+        },
+        {
+          "timestamp": "2026-11-10T04:45:00.000Z",
+          "value": {
+            "celsius": 15.22,
+            "fahrenheit": 59.4
+          }
+        },
+        {
+          "timestamp": "2026-11-10T05:00:00.000Z",
+          "value": {
+            "celsius": 15.16,
+            "fahrenheit": 59.29
+          }
+        },
+        {
+          "timestamp": "2026-11-10T05:15:00.000Z",
+          "value": {
+            "celsius": 15.16,
+            "fahrenheit": 59.29
+          }
+        },
+        {
+          "timestamp": "2026-11-10T05:30:00.000Z",
+          "value": {
+            "celsius": 15.95,
+            "fahrenheit": 60.71
+          }
+        },
+        {
+          "timestamp": "2026-11-10T05:45:00.000Z",
+          "value": {
+            "celsius": 17.9,
+            "fahrenheit": 64.22
+          }
+        },
+        {
+          "timestamp": "2026-11-10T06:00:00.000Z",
+          "value": {
+            "celsius": 19.03,
+            "fahrenheit": 66.25
+          }
+        },
+        {
+          "timestamp": "2026-11-10T06:15:00.000Z",
+          "value": {
+            "celsius": 20.0,
+            "fahrenheit": 68.0
+          }
+        },
+        {
+          "timestamp": "2026-11-10T06:30:00.000Z",
+          "value": {
+            "celsius": 21.09,
+            "fahrenheit": 69.96
+          }
+        },
+        {
+          "timestamp": "2026-11-10T06:45:00.000Z",
+          "value": {
+            "celsius": 21.54,
+            "fahrenheit": 70.77
+          }
+        },
+        {
+          "timestamp": "2026-11-10T07:00:00.000Z",
+          "value": {
+            "celsius": 21.17,
+            "fahrenheit": 70.11
+          }
+        },
+        {
+          "timestamp": "2026-11-10T07:15:00.000Z",
+          "value": {
+            "celsius": 21.31,
+            "fahrenheit": 70.36
+          }
+        },
+        {
+          "timestamp": "2026-11-10T07:30:00.000Z",
+          "value": {
+            "celsius": 21.45,
+            "fahrenheit": 70.61
+          }
+        },
+        {
+          "timestamp": "2026-11-10T07:45:00.000Z",
+          "value": {
+            "celsius": 21.91,
+            "fahrenheit": 71.44
+          }
+        },
+        {
+          "timestamp": "2026-11-10T08:00:00.000Z",
+          "value": {
+            "celsius": 22.42,
+            "fahrenheit": 72.36
+          }
+        },
+        {
+          "timestamp": "2026-11-10T08:15:00.000Z",
+          "value": {
+            "celsius": 22.87,
+            "fahrenheit": 73.17
+          }
+        },
+        {
+          "timestamp": "2026-11-10T08:30:00.000Z",
+          "value": {
+            "celsius": 22.82,
+            "fahrenheit": 73.08
+          }
+        },
+        {
+          "timestamp": "2026-11-10T08:45:00.000Z",
+          "value": {
+            "celsius": 22.44,
+            "fahrenheit": 72.39
+          }
+        },
+        {
+          "timestamp": "2026-11-10T09:00:00.000Z",
+          "value": {
+            "celsius": 21.86,
+            "fahrenheit": 71.35
+          }
+        },
+        {
+          "timestamp": "2026-11-10T09:15:00.000Z",
+          "value": {
+            "celsius": 20.97,
+            "fahrenheit": 69.75
+          }
+        },
+        {
+          "timestamp": "2026-11-10T09:30:00.000Z",
+          "value": {
+            "celsius": 20.13,
+            "fahrenheit": 68.23
+          }
+        },
+        {
+          "timestamp": "2026-11-10T09:45:00.000Z",
+          "value": {
+            "celsius": 19.3,
+            "fahrenheit": 66.74
+          }
+        },
+        {
+          "timestamp": "2026-11-10T10:00:00.000Z",
+          "value": {
+            "celsius": 18.56,
+            "fahrenheit": 65.41
+          }
+        },
+        {
+          "timestamp": "2026-11-10T10:15:00.000Z",
+          "value": {
+            "celsius": 18.69,
+            "fahrenheit": 65.64
+          }
+        },
+        {
+          "timestamp": "2026-11-10T10:30:00.000Z",
+          "value": {
+            "celsius": 19.48,
+            "fahrenheit": 67.06
+          }
+        },
+        {
+          "timestamp": "2026-11-10T10:45:00.000Z",
+          "value": {
+            "celsius": 19.84,
+            "fahrenheit": 67.71
+          }
+        },
+        {
+          "timestamp": "2026-11-10T11:00:00.000Z",
+          "value": {
+            "celsius": 19.63,
+            "fahrenheit": 67.33
+          }
+        },
+        {
+          "timestamp": "2026-11-10T11:15:00.000Z",
+          "value": {
+            "celsius": 19.19,
+            "fahrenheit": 66.54
+          }
+        },
+        {
+          "timestamp": "2026-11-10T11:30:00.000Z",
+          "value": {
+            "celsius": 19.53,
+            "fahrenheit": 67.15
+          }
+        },
+        {
+          "timestamp": "2026-11-10T11:45:00.000Z",
+          "value": {
+            "celsius": 19.85,
+            "fahrenheit": 67.73
+          }
+        },
+        {
+          "timestamp": "2026-11-10T12:00:00.000Z",
+          "value": {
+            "celsius": 19.7,
+            "fahrenheit": 67.46
+          }
+        },
+        {
+          "timestamp": "2026-11-10T12:15:00.000Z",
+          "value": {
+            "celsius": 19.88,
+            "fahrenheit": 67.78
+          }
+        },
+        {
+          "timestamp": "2026-11-10T12:30:00.000Z",
+          "value": {
+            "celsius": 20.6,
+            "fahrenheit": 69.08
+          }
+        },
+        {
+          "timestamp": "2026-11-10T12:45:00.000Z",
+          "value": {
+            "celsius": 20.58,
+            "fahrenheit": 69.04
+          }
+        },
+        {
+          "timestamp": "2026-11-10T13:00:00.000Z",
+          "value": {
+            "celsius": 20.2,
+            "fahrenheit": 68.36
+          }
+        },
+        {
+          "timestamp": "2026-11-10T13:15:00.000Z",
+          "value": {
+            "celsius": 19.66,
+            "fahrenheit": 67.39
+          }
+        },
+        {
+          "timestamp": "2026-11-10T13:30:00.000Z",
+          "value": {
+            "celsius": 19.94,
+            "fahrenheit": 67.89
+          }
+        },
+        {
+          "timestamp": "2026-11-10T13:45:00.000Z",
+          "value": {
+            "celsius": 19.97,
+            "fahrenheit": 67.95
+          }
+        },
+        {
+          "timestamp": "2026-11-10T14:00:00.000Z",
+          "value": {
+            "celsius": 19.79,
+            "fahrenheit": 67.62
+          }
+        },
+        {
+          "timestamp": "2026-11-10T14:15:00.000Z",
+          "value": {
+            "celsius": 19.7,
+            "fahrenheit": 67.46
+          }
+        },
+        {
+          "timestamp": "2026-11-10T14:30:00.000Z",
+          "value": {
+            "celsius": 19.72,
+            "fahrenheit": 67.5
+          }
+        },
+        {
+          "timestamp": "2026-11-10T14:45:00.000Z",
+          "value": {
+            "celsius": 19.61,
+            "fahrenheit": 67.3
+          }
+        },
+        {
+          "timestamp": "2026-11-10T15:00:00.000Z",
+          "value": {
+            "celsius": 19.81,
+            "fahrenheit": 67.66
+          }
+        },
+        {
+          "timestamp": "2026-11-10T15:15:00.000Z",
+          "value": {
+            "celsius": 20.32,
+            "fahrenheit": 68.58
+          }
+        },
+        {
+          "timestamp": "2026-11-10T15:30:00.000Z",
+          "value": {
+            "celsius": 20.59,
+            "fahrenheit": 69.06
+          }
+        },
+        {
+          "timestamp": "2026-11-10T15:45:00.000Z",
+          "value": {
+            "celsius": 20.86,
+            "fahrenheit": 69.55
+          }
+        },
+        {
+          "timestamp": "2026-11-10T16:00:00.000Z",
+          "value": {
+            "celsius": 20.9,
+            "fahrenheit": 69.62
+          }
+        },
+        {
+          "timestamp": "2026-11-10T16:15:00.000Z",
+          "value": {
+            "celsius": 21.26,
+            "fahrenheit": 70.27
+          }
+        },
+        {
+          "timestamp": "2026-11-10T16:30:00.000Z",
+          "value": {
+            "celsius": 22.27,
+            "fahrenheit": 72.09
+          }
+        },
+        {
+          "timestamp": "2026-11-10T16:45:00.000Z",
+          "value": {
+            "celsius": 22.88,
+            "fahrenheit": 73.18
+          }
+        },
+        {
+          "timestamp": "2026-11-10T17:00:00.000Z",
+          "value": {
+            "celsius": 23.44,
+            "fahrenheit": 74.19
+          }
+        },
+        {
+          "timestamp": "2026-11-10T17:15:00.000Z",
+          "value": {
+            "celsius": 24.16,
+            "fahrenheit": 75.49
+          }
+        },
+        {
+          "timestamp": "2026-11-10T17:30:00.000Z",
+          "value": {
+            "celsius": 24.64,
+            "fahrenheit": 76.35
+          }
+        },
+        {
+          "timestamp": "2026-11-10T17:45:00.000Z",
+          "value": {
+            "celsius": 25.1,
+            "fahrenheit": 77.18
+          }
+        },
+        {
+          "timestamp": "2026-11-10T18:00:00.000Z",
+          "value": {
+            "celsius": 25.18,
+            "fahrenheit": 77.32
+          }
+        },
+        {
+          "timestamp": "2026-11-10T18:15:00.000Z",
+          "value": {
+            "celsius": 25.17,
+            "fahrenheit": 77.31
+          }
+        },
+        {
+          "timestamp": "2026-11-10T18:30:00.000Z",
+          "value": {
+            "celsius": 25.02,
+            "fahrenheit": 77.04
+          }
+        },
+        {
+          "timestamp": "2026-11-10T18:45:00.000Z",
+          "value": {
+            "celsius": 24.73,
+            "fahrenheit": 76.51
+          }
+        },
+        {
+          "timestamp": "2026-11-10T19:00:00.000Z",
+          "value": {
+            "celsius": 24.08,
+            "fahrenheit": 75.34
+          }
+        },
+        {
+          "timestamp": "2026-11-10T19:15:00.000Z",
+          "value": {
+            "celsius": 24.08,
+            "fahrenheit": 75.34
+          }
+        },
+        {
+          "timestamp": "2026-11-10T19:30:00.000Z",
+          "value": {
+            "celsius": 24.08,
+            "fahrenheit": 75.34
+          }
+        },
+        {
+          "timestamp": "2026-11-10T19:35:55.000Z",
+          "value": {
+            "celsius": 24.08,
+            "fahrenheit": 75.34
+          }
+        }
+      ]
+    }
+  },
+  "settings": {
+    "timeSeriesType": "dataIntervals",
+    "valueType": "heatingSetting",
+    "dataIntervals": [
+      {
+        "from": "2026-11-09T23:45:00.000Z",
+        "to": "2026-11-10T00:00:00.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 14.5,
+            "fahrenheit": 58.1
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T00:00:00.000Z",
+        "to": "2026-11-10T05:20:00.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 14.0,
+            "fahrenheit": 57.2
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T05:20:00.000Z",
+        "to": "2026-11-10T07:23:20.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 17.5,
+            "fahrenheit": 63.5
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T07:23:20.000Z",
+        "to": "2026-11-10T07:23:28.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 14.0,
+            "fahrenheit": 57.2
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T07:23:28.000Z",
+        "to": "2026-11-10T07:43:28.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "OFF",
+          "temperature": null
+        }
+      },
+      {
+        "from": "2026-11-10T07:43:28.000Z",
+        "to": "2026-11-10T07:51:10.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 17.5,
+            "fahrenheit": 63.5
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T07:51:10.000Z",
+        "to": "2026-11-10T09:51:16.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "OFF",
+          "temperature": null
+        }
+      },
+      {
+        "from": "2026-11-10T09:51:16.000Z",
+        "to": "2026-11-10T10:10:07.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 17.0,
+            "fahrenheit": 62.6
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T10:10:07.000Z",
+        "to": "2026-11-10T12:10:08.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "OFF",
+          "temperature": null
+        }
+      },
+      {
+        "from": "2026-11-10T12:10:08.000Z",
+        "to": "2026-11-10T12:34:59.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 17.0,
+            "fahrenheit": 62.6
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T12:34:59.000Z",
+        "to": "2026-11-10T12:36:26.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 13.72,
+            "fahrenheit": 56.7
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T12:36:26.000Z",
+        "to": "2026-11-10T13:09:56.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 13.71,
+            "fahrenheit": 56.68
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T13:09:56.000Z",
+        "to": "2026-11-10T13:11:18.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 13.72,
+            "fahrenheit": 56.7
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T13:11:18.000Z",
+        "to": "2026-11-10T13:11:50.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 13.73,
+            "fahrenheit": 56.71
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T13:11:50.000Z",
+        "to": "2026-11-10T15:20:00.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 17.0,
+            "fahrenheit": 62.6
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T15:20:00.000Z",
+        "to": "2026-11-10T16:49:46.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 18.0,
+            "fahrenheit": 64.4
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T16:49:46.000Z",
+        "to": "2026-11-10T18:44:00.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "OFF",
+          "temperature": null
+        }
+      },
+      {
+        "from": "2026-11-10T18:44:00.000Z",
+        "to": "2026-11-10T18:44:06.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 22.5,
+            "fahrenheit": 72.5
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T18:44:06.000Z",
+        "to": "2026-11-10T18:57:03.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "OFF",
+          "temperature": null
+        }
+      },
+      {
+        "from": "2026-11-10T18:57:03.000Z",
+        "to": "2026-11-10T19:08:54.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 17.5,
+            "fahrenheit": 63.5
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T19:08:54.000Z",
+        "to": "2026-11-10T19:46:48.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "OFF",
+          "temperature": null
+        }
+      },
+      {
+        "from": "2026-11-10T19:46:48.000Z",
+        "to": "2026-11-10T20:30:00.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 17.5,
+            "fahrenheit": 63.5
+          }
+        }
+      },
+      {
+        "from": "2026-11-10T20:30:00.000Z",
+        "to": "2026-11-11T00:00:00.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 14.5,
+            "fahrenheit": 58.1
+          }
+        }
+      },
+      {
+        "from": "2026-11-11T00:00:00.000Z",
+        "to": "2026-11-11T00:15:00.000Z",
+        "value": {
+          "type": "HEATING",
+          "power": "ON",
+          "temperature": {
+            "celsius": 14.0,
+            "fahrenheit": 57.2
+          }
+        }
+      }
+    ]
+  },
+  "callForHeat": {
+    "timeSeriesType": "dataIntervals",
+    "valueType": "callForHeat",
+    "dataIntervals": [
+      {
+        "from": "2026-11-09T23:45:00.000Z",
+        "to": "2026-11-10T05:20:01.000Z",
+        "value": "NONE"
+      },
+      {
+        "from": "2026-11-10T05:20:01.000Z",
+        "to": "2026-11-10T05:31:21.000Z",
+        "value": "HIGH"
+      },
+      {
+        "from": "2026-11-10T05:31:21.000Z",
+        "to": "2026-11-10T05:33:23.000Z",
+        "value": "MEDIUM"
+      },
+      {
+        "from": "2026-11-10T05:33:23.000Z",
+        "to": "2026-11-10T05:34:49.000Z",
+        "value": "LOW"
+      },
+      {
+        "from": "2026-11-10T05:34:49.000Z",
+        "to": "2026-11-11T00:15:00.000Z",
+        "value": "NONE"
+      }
+    ]
+  }
+}
