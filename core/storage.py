@@ -12,6 +12,9 @@ import click
 
 STORED_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "stored_data")
 BATTERY_HISTORY_FILE = os.path.join(STORED_DATA_DIR, "battery_history.json")
+# Which room each device was in when last seen, so tab completion can offer
+# room names without asking Tado. A convenience only: losing it costs nothing.
+ROOM_NAMES_FILE = os.path.join(STORED_DATA_DIR, "room_names.json")
 
 # The day tracking began. Batteries dated on or before this were already fitted,
 # so their real age is unknown and any lifespan measured from it is a minimum.
@@ -205,3 +208,28 @@ def update_battery_history(current_states: dict[str, str], disconnected: set[str
         _save_json(BATTERY_HISTORY_FILE, {"devices": history})
 
     return history
+
+
+def save_room_names(device_zones: dict[str, str]) -> None:
+    """Remember which room each device is in. Failing to save is harmless, so it is never an error."""
+    if not device_zones:
+        return
+    try:
+        if _load_room_names() != device_zones:
+            _save_json(ROOM_NAMES_FILE, device_zones)
+    except OSError:
+        pass
+
+
+def _load_room_names() -> dict[str, str]:
+    try:
+        with open(ROOM_NAMES_FILE) as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def load_room_names() -> dict[str, str]:
+    """Return the last saved serial-to-room map, or an empty one if there is none."""
+    return _load_room_names()

@@ -358,10 +358,10 @@ def test_damaged_history_stops_the_report_with_a_clear_message(frozen_today, his
 
 
 def test_replaced_command_refuses_an_unknown_serial(frozen_today, history_file):
-    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["NOPE"])
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["VA9"])
 
     assert result.exit_code != 0
-    assert "No battery history for NOPE" in result.output
+    assert "No battery history for VA9" in result.output
 
 
 # --- _get_device_zone_map -------------------------------------------------
@@ -478,3 +478,153 @@ def test_history_shows_meter_readings_on_their_own(frozen_today, history_file, m
 
     assert "70%" in result.output
     assert "No replaced batteries" not in result.output
+
+
+# --- choosing a device by a rough room name ---------------------------------
+
+from commands.battery import _match_rooms
+
+ROOMS = ["Bathroom", "Downstairs Loo", "Hall", "Kitchen", "Main Bedroom", "Spare Bedroom"]
+
+
+@pytest.mark.parametrize("query,expected,close", [
+    ("hall", ["Hall"], False),
+    ("downstairs-loo", ["Downstairs Loo"], False),
+    ("loo", ["Downstairs Loo"], False),
+    ("bedroom", ["Main Bedroom", "Spare Bedroom"], False),
+    ("kitchn", ["Kitchen"], True),
+    ("bathrm", ["Bathroom"], True),
+    ("dwnstairs loo", ["Downstairs Loo"], True),
+    ("garage", [], True),
+    ("", [], False),
+])
+def test_match_rooms(query, expected, close):
+    assert _match_rooms(query, ROOMS) == (expected, close)
+
+
+class FakeRoomClient:
+    """Stands in for TadoClient when a room name is looked up; no network."""
+
+    def connect(self):
+        return True
+
+    def get_zones(self):
+        return [
+            {"name": "Hall", "devices": [{"serialNo": "VA1"}, {"serialNo": "SU3893321984"}]},
+            {"name": "Kitchen", "devices": [{"serialNo": "VA2"}]},
+            {"name": "Main Bedroom", "devices": [{"serialNo": "VA3"}, {"serialNo": "VA4"}]},
+        ]
+
+
+ROOM_HISTORY = {"devices": {
+    serial: {"good_since": "2026-05-01", "low_since": "2026-08-20"}
+    for serial in ["VA1", "VA2", "VA3", "VA4", "SU3893321984"]
+}}
+
+
+@pytest.fixture
+def rooms(frozen_today, history_file, monkeypatch):
+    history_file.write_text(json.dumps(ROOM_HISTORY))
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeRoomClient)
+    return history_file
+
+
+def test_replaced_command_takes_a_room_name(rooms):
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["hall"])
+
+    assert result.exit_code == 0, result.output
+    assert "Hall: VA1" in result.output  # the mains-wired thermostat is left out
+    assert json.loads(rooms.read_text())["devices"]["VA1"]["past_batteries"][0]["days"] == 111
+
+
+def test_a_misspelt_room_is_confirmed_first(rooms):
+    declined = CliRunner().invoke(battery_mod.battery_replaced_command, ["kitchn"], input="n\n")
+    assert declined.exit_code != 0
+    assert "past_batteries" not in rooms.read_text()
+
+    accepted = CliRunner().invoke(battery_mod.battery_replaced_command, ["kitchn"], input="y\n")
+    assert accepted.exit_code == 0, accepted.output
+    assert "Kitchen (VA2)" in accepted.output
+    assert "past_batteries" in json.loads(rooms.read_text())["devices"]["VA2"]
+
+
+def test_a_room_with_two_devices_asks_for_the_serial(rooms):
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["main bedroom"])
+
+    assert result.exit_code != 0
+    assert "VA3" in result.output and "VA4" in result.output
+    assert "past_batteries" not in rooms.read_text()
+
+
+def test_an_unknown_room_lists_the_rooms(rooms):
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["garage"])
+
+    assert result.exit_code != 0
+    assert "Hall, Kitchen, Main Bedroom" in result.output
+
+
+def test_reading_command_takes_a_room_name(rooms):
+    result = CliRunner().invoke(battery_mod.battery_reading_command, ["kitchen", "30", "40"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(rooms.read_text())["devices"]["VA2"]["meter_readings"][0]["percent"] == [30, 40]
+
+
+def test_a_serial_never_contacts_tado(frozen_today, history_file, monkeypatch):
+    history_file.write_text(json.dumps(ROOM_HISTORY))
+
+    class NoClient:
+        def __init__(self):
+            raise AssertionError("a serial must not need Tado")
+
+    monkeypatch.setattr(battery_mod, "TadoClient", NoClient)
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"])
+
+    assert result.exit_code == 0, result.output
+
+
+# --- tab completion of DEVICE ------------------------------------------------
+
+from commands.battery import _complete_device
+
+
+def test_fetching_zones_saves_room_names(room_names_file):
+    _get_device_zone_map(FakeClient([{"name": "Lounge", "devices": [{"serialNo": "AAA"}]}]))
+
+    assert json.loads(room_names_file.read_text()) == {"AAA": "Lounge"}
+
+
+def _offered(incomplete):
+    return [(item.value, item.help) for item in _complete_device(None, None, incomplete)]
+
+
+def test_completion_offers_rooms_then_serials(frozen_today, history_file, room_names_file):
+    history_file.write_text(json.dumps(ROOM_HISTORY))
+    room_names_file.write_text(json.dumps(
+        {"VA1": "Hall", "SU3893321984": "Hall", "VA2": "Kitchen", "VA3": "Main Bedroom", "VA4": "Main Bedroom"}
+    ))
+
+    assert _offered("") == [
+        ("Hall", "VA1"),
+        ("Kitchen", "VA2"),
+        ("Main Bedroom", "VA3, VA4"),
+        ("VA1", "Hall"),
+        ("VA2", "Kitchen"),
+        ("VA3", "Main Bedroom"),
+        ("VA4", "Main Bedroom"),
+    ]
+    assert _offered("bed") == [("Main Bedroom", "VA3, VA4")]
+    assert _offered("va2") == [("VA2", "Kitchen")]
+
+
+def test_completion_never_contacts_tado_and_copes_without_room_names(frozen_today, history_file, monkeypatch):
+    history_file.write_text(json.dumps(ROOM_HISTORY))
+    monkeypatch.setattr(battery_mod, "TadoClient", None)
+
+    assert _offered("") == [("VA1", ""), ("VA2", ""), ("VA3", ""), ("VA4", "")]
+
+
+def test_completion_offers_nothing_for_a_damaged_history(history_file):
+    history_file.write_text("{ not json")
+
+    assert _offered("") == []
