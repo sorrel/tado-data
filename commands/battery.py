@@ -11,6 +11,7 @@ from click.shell_completion import CompletionItem
 
 from core.client import TadoClient
 from core.storage import (
+    NoOldBatteries,
     add_meter_reading,
     load_battery_history,
     load_room_names,
@@ -417,16 +418,30 @@ def _format_percents(percents: list[int]) -> str:
 @click.argument("percents", nargs=-1, required=True, type=click.IntRange(0, 100))
 @click.option("--date", "on", type=click.DateTime(formats=["%Y-%m-%d"]), help="Day of the reading (YYYY-MM-DD). Defaults to today.")
 @click.option("--note", help="Anything worth keeping, such as whether the batteries went back in.")
-def battery_reading_command(device, percents, on, note):
+@click.option(
+    "--old-set",
+    is_flag=True,
+    help="Put the reading on the batteries last taken out, not the ones now fitted. "
+    "The date defaults to the day they came out.",
+)
+def battery_reading_command(device, percents, on, note, old_set):
     """Record a battery meter's reading, one PERCENT per cell, for DEVICE (a serial, or a room name, roughly)."""
     if on and on.date() > date.today():
         raise click.BadParameter("can't be in the future.", param_hint="--date")
     serial = _resolve_device(device, f"Record {_format_percents(list(percents))} for")
     try:
-        reading = add_meter_reading(serial, list(percents), on=on.date().isoformat() if on else None, note=note)
+        reading = add_meter_reading(
+            serial, list(percents), on=on.date().isoformat() if on else None, note=note, old_set=old_set
+        )
     except KeyError:
         raise click.ClickException(f"No battery history for {serial}.")
-    click.echo(f"{serial}: {_format_percents(reading['percent'])} recorded for {reading['date']}.")
+    except NoOldBatteries:
+        raise click.ClickException(f"{serial} has no replaced batteries to add a reading to.")
+    message = f"{serial}: {_format_percents(reading['percent'])} recorded for {reading['date']}"
+    if old_set:
+        replaced = load_battery_history()[serial]["past_batteries"][-1]["replaced"]
+        message += f", on the batteries taken out on {replaced}"
+    click.echo(message + ".")
 
 
 def _print_meter_readings(readings: list[tuple[str, dict]], device_zones: dict) -> None:
