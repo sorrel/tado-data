@@ -11,6 +11,7 @@ import json
 import pytest
 
 from core.storage import (
+    AlreadyReplacedToday,
     BatteryHistoryError,
     NoOldBatteries,
     _save_json,
@@ -126,7 +127,13 @@ def test_new_lifespan_is_added_after_earlier_ones(frozen_today, history_file):
     }
     _write(
         history_file,
-        {SERIAL: {"good_since": "2026-06-02", "low_since": "2026-08-20", "past_batteries": [earlier]}},
+        {
+            SERIAL: {
+                "good_since": "2026-06-02",
+                "low_since": "2026-08-20",
+                "past_batteries": [earlier],
+            }
+        },
     )
 
     mark_battery_replaced(SERIAL)
@@ -142,15 +149,27 @@ def test_lifespan_is_recorded_only_once(frozen_today, history_file):
     _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20"}})
 
     mark_battery_replaced(SERIAL)
-    mark_battery_replaced(SERIAL)
+    with pytest.raises(AlreadyReplacedToday):
+        mark_battery_replaced(SERIAL)
     history = load_battery_history()
 
     assert len(history[SERIAL]["past_batteries"]) == 1
 
 
 def test_past_batteries_survive_going_low(frozen_today, history_file):
-    past = [{"fitted": "2026-05-01", "went_low": "2026-06-01", "replaced": "2026-06-02", "days": 31, "minimum": False}]
-    _write(history_file, {SERIAL: {"good_since": "2026-06-02", "low_since": None, "past_batteries": past}})
+    past = [
+        {
+            "fitted": "2026-05-01",
+            "went_low": "2026-06-01",
+            "replaced": "2026-06-02",
+            "days": 31,
+            "minimum": False,
+        }
+    ]
+    _write(
+        history_file,
+        {SERIAL: {"good_since": "2026-06-02", "low_since": None, "past_batteries": past}},
+    )
 
     history = update_battery_history({SERIAL: "LOW"})
 
@@ -197,7 +216,10 @@ def test_low_device_going_offline_records_when_it_died(frozen_today, history_fil
 
 
 def test_first_date_seen_dead_is_kept(frozen_today, history_file):
-    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "died": "2026-08-22"}})
+    _write(
+        history_file,
+        {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "died": "2026-08-22"}},
+    )
 
     history = update_battery_history({SERIAL: "LOW"}, disconnected={SERIAL})
 
@@ -206,7 +228,10 @@ def test_first_date_seen_dead_is_kept(frozen_today, history_file):
 
 def test_low_device_coming_back_online_was_not_dead(frozen_today, history_file):
     """A brief network drop mustn't count as the battery dying."""
-    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "died": "2026-08-22"}})
+    _write(
+        history_file,
+        {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "died": "2026-08-22"}},
+    )
 
     history = update_battery_history({SERIAL: "LOW"})
 
@@ -222,7 +247,10 @@ def test_normal_device_going_offline_is_not_dead(frozen_today, history_file):
 
 
 def test_replacing_a_dead_battery_keeps_when_it_died(frozen_today, history_file):
-    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "died": "2026-08-22"}})
+    _write(
+        history_file,
+        {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "died": "2026-08-22"}},
+    )
 
     mark_battery_replaced(SERIAL)
     history = load_battery_history()
@@ -244,7 +272,9 @@ def test_marking_replaced_restarts_the_clock(frozen_today, history_file):
     assert entry["low_since"] is None
 
 
-def test_replacing_a_battery_that_never_went_low_keeps_its_time_in_as_a_minimum(frozen_today, history_file):
+def test_replacing_a_battery_that_never_went_low_keeps_its_time_in_as_a_minimum(
+    frozen_today, history_file
+):
     # Changed while still NORMAL (VA1859608064, November 2026): how long it
     # would have lasted to a low warning is unknown, but it is at least this.
     _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
@@ -264,7 +294,10 @@ def test_replacing_a_battery_that_never_went_low_keeps_its_time_in_as_a_minimum(
 
 def test_replacing_a_never_low_battery_keeps_its_meter_readings(frozen_today, history_file):
     reading = {"date": "2026-08-24", "percent": [50, 50]}
-    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None, "meter_readings": [reading]}})
+    _write(
+        history_file,
+        {SERIAL: {"good_since": "2026-05-01", "low_since": None, "meter_readings": [reading]}},
+    )
 
     retired = mark_battery_replaced(SERIAL)
 
@@ -298,7 +331,10 @@ def test_going_low_opens_a_low_spell(frozen_today, history_file):
 
 def test_staying_low_keeps_one_spell(frozen_today, history_file):
     spell = {"from": "2026-08-20", "to": None}
-    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "low_periods": [spell]}})
+    _write(
+        history_file,
+        {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "low_periods": [spell]}},
+    )
 
     history = update_battery_history({SERIAL: "LOW"})
 
@@ -306,11 +342,16 @@ def test_staying_low_keeps_one_spell(frozen_today, history_file):
 
 
 def test_going_back_to_normal_closes_the_spell(frozen_today, history_file):
-    _write(history_file, {SERIAL: {
-        "good_since": "2026-05-01",
-        "low_since": "2026-08-20",
-        "low_periods": [{"from": "2026-08-20", "to": None}],
-    }})
+    _write(
+        history_file,
+        {
+            SERIAL: {
+                "good_since": "2026-05-01",
+                "low_since": "2026-08-20",
+                "low_periods": [{"from": "2026-08-20", "to": None}],
+            }
+        },
+    )
 
     history = update_battery_history({SERIAL: "NORMAL"})
 
@@ -327,7 +368,10 @@ def test_low_date_saved_before_spells_existed_is_kept(frozen_today, history_file
 
 def test_going_low_again_adds_a_second_spell(frozen_today, history_file):
     first = {"from": "2026-08-20", "to": "2026-08-21"}
-    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "low_periods": [first]}})
+    _write(
+        history_file,
+        {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "low_periods": [first]}},
+    )
 
     history = update_battery_history({SERIAL: "LOW"})
 
@@ -337,7 +381,10 @@ def test_going_low_again_adds_a_second_spell(frozen_today, history_file):
 
 def test_replacing_a_battery_keeps_its_low_spells(frozen_today, history_file):
     spells = [{"from": "2026-08-20", "to": "2026-08-21"}]
-    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "low_periods": spells}})
+    _write(
+        history_file,
+        {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "low_periods": spells}},
+    )
 
     mark_battery_replaced(SERIAL)
 
@@ -353,9 +400,7 @@ def test_history_is_written_to_disk_and_reloads(frozen_today, history_file):
     update_battery_history({SERIAL: "NORMAL"})
 
     assert history_file.exists()
-    assert load_battery_history() == {
-        SERIAL: {"good_since": "2026-08-25", "low_since": None}
-    }
+    assert load_battery_history() == {SERIAL: {"good_since": "2026-08-25", "low_since": None}}
 
 
 def test_multiple_devices_tracked_independently(frozen_today, history_file):
@@ -461,7 +506,7 @@ def test_first_ever_save_has_nothing_to_back_up(frozen_today, history_file):
 def test_a_meter_reading_is_saved_against_the_batteries_now_fitted(frozen_today, history_file):
     _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20"}})
 
-    reading = add_meter_reading(SERIAL, [30, 40], note="left in")
+    reading, _ = add_meter_reading(SERIAL, [30, 40], note="left in")
 
     assert reading == {"date": "2026-08-25", "percent": [30, 40], "note": "left in"}
     assert load_battery_history()[SERIAL]["meter_readings"] == [reading]
@@ -470,7 +515,7 @@ def test_a_meter_reading_is_saved_against_the_batteries_now_fitted(frozen_today,
 def test_a_meter_reading_can_be_backdated_and_needs_no_note(frozen_today, history_file):
     _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
 
-    reading = add_meter_reading(SERIAL, [90, 90], on="2026-08-20")
+    reading, _ = add_meter_reading(SERIAL, [90, 90], on="2026-08-20")
 
     assert reading == {"date": "2026-08-20", "percent": [90, 90]}
 
@@ -495,7 +540,16 @@ def test_a_meter_reading_for_an_unknown_device_is_refused(frozen_today, history_
 def test_meter_readings_survive_a_battery_report(frozen_today, history_file):
     """The report rebuilds each entry, so it must carry the readings across."""
     readings = [{"date": "2026-08-20", "percent": [30, 40]}]
-    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "meter_readings": readings}})
+    _write(
+        history_file,
+        {
+            SERIAL: {
+                "good_since": "2026-05-01",
+                "low_since": "2026-08-20",
+                "meter_readings": readings,
+            }
+        },
+    )
 
     update_battery_history({SERIAL: "NORMAL"})
     update_battery_history({SERIAL: "LOW"})
@@ -505,7 +559,16 @@ def test_meter_readings_survive_a_battery_report(frozen_today, history_file):
 
 def test_replacing_a_battery_keeps_its_meter_readings(frozen_today, history_file):
     readings = [{"date": "2026-08-20", "percent": [30, 40]}]
-    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "meter_readings": readings}})
+    _write(
+        history_file,
+        {
+            SERIAL: {
+                "good_since": "2026-05-01",
+                "low_since": "2026-08-20",
+                "meter_readings": readings,
+            }
+        },
+    )
 
     mark_battery_replaced(SERIAL)
 
@@ -516,14 +579,31 @@ def test_replacing_a_battery_keeps_its_meter_readings(frozen_today, history_file
 
 # --- readings for the batteries already taken out ---------------------------
 
-OLD_SET = {"fitted": "2026-05-01", "went_low": None, "replaced": "2026-08-20", "days": 111, "minimum": True}
+OLD_SET = {
+    "fitted": "2026-05-01",
+    "went_low": None,
+    "replaced": "2026-08-20",
+    "days": 111,
+    "minimum": True,
+}
 
 
 def test_a_meter_reading_can_go_on_the_set_last_taken_out(frozen_today, history_file):
     earlier = {**OLD_SET, "fitted": "2026-01-01", "replaced": "2026-05-01"}
-    _write(history_file, {SERIAL: {"good_since": "2026-08-20", "low_since": None, "past_batteries": [earlier, OLD_SET]}})
+    _write(
+        history_file,
+        {
+            SERIAL: {
+                "good_since": "2026-08-20",
+                "low_since": None,
+                "past_batteries": [earlier, OLD_SET],
+            }
+        },
+    )
 
-    reading = add_meter_reading(SERIAL, [50, 50], note="changed early", old_set=True)
+    reading, replaced = add_meter_reading(SERIAL, [50, 50], note="changed early", old_set=True)
+
+    assert replaced == "2026-08-20"
 
     # Dated the day they came out unless told otherwise
     assert reading == {"date": "2026-08-20", "percent": [50, 50], "note": "changed early"}
@@ -534,9 +614,12 @@ def test_a_meter_reading_can_go_on_the_set_last_taken_out(frozen_today, history_
 
 
 def test_an_old_set_reading_can_be_backdated(frozen_today, history_file):
-    _write(history_file, {SERIAL: {"good_since": "2026-08-20", "low_since": None, "past_batteries": [OLD_SET]}})
+    _write(
+        history_file,
+        {SERIAL: {"good_since": "2026-08-20", "low_since": None, "past_batteries": [OLD_SET]}},
+    )
 
-    reading = add_meter_reading(SERIAL, [40], on="2026-08-19", old_set=True)
+    reading, _ = add_meter_reading(SERIAL, [40], on="2026-08-19", old_set=True)
 
     assert reading["date"] == "2026-08-19"
 

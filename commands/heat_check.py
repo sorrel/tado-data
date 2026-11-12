@@ -88,7 +88,10 @@ def _failure_message(error: Exception) -> str:
     if isinstance(error, AuthNetworkError):
         return "Heat check didn't run: couldn't reach Tado's login server."
     if isinstance(error, TokenLockBusy):
-        return "Heat check didn't run: another tado command was using the login. It will try again tomorrow."
+        return (
+            "Heat check didn't run: another tado command was using the login. "
+            "It will try again tomorrow."
+        )
     if isinstance(error, RateLimited):
         return "Tado's daily request limit was reached; the check will carry on tomorrow."
     if isinstance(error, TadoAPIError):
@@ -172,8 +175,17 @@ def _run_scheduled(today: date) -> int:
 
 
 @click.command("heat-check")
-@click.option("--date", "on", type=click.DateTime(formats=["%Y-%m-%d"]), help="Day to check (YYYY-MM-DD). Defaults to yesterday.")
-@click.option("--scheduled", is_flag=True, help="Run unattended: check every day since the last run and notify.")
+@click.option(
+    "--date",
+    "on",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="Day to check (YYYY-MM-DD). Defaults to yesterday.",
+)
+@click.option(
+    "--scheduled",
+    is_flag=True,
+    help="Run unattended: check every day since the last run and notify.",
+)
 @click.pass_context
 def heat_check_command(ctx, on, scheduled):
     """Find rooms that warmed with no call for heat, and offline valves."""
@@ -185,7 +197,9 @@ def heat_check_command(ctx, on, scheduled):
 
     day = on.date() if on else today - timedelta(days=1)
     if day >= today:
-        raise click.BadParameter("must be before today; today's report isn't complete yet.", param_hint="--date")
+        raise click.BadParameter(
+            "must be before today; today's report isn't complete yet.", param_hint="--date"
+        )
 
     client = TadoClient()
     if not client.connect():
@@ -196,12 +210,16 @@ def heat_check_command(ctx, on, scheduled):
     try:
         found = check_day(client, day, zones)
     except RateLimited:
-        raise click.ClickException("Tado's daily request limit has been reached. Try again tomorrow.")
+        raise click.ClickException(
+            "Tado's daily request limit has been reached. Try again tomorrow."
+        )
     except TadoAPIError as error:
         raise click.ClickException(f"Tado returned an error: {error}.")
 
     names = _names(zones)
-    rows = [(names[zone_id], finding) for zone_id, findings in found.items() for finding in findings]
+    rows = [
+        (names[zone_id], finding) for zone_id, findings in found.items() for finding in findings
+    ]
     if not rows:
         click.echo(f"No problems on {day}")
         return

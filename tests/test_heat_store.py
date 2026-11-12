@@ -3,7 +3,6 @@ Tests for the heat check's local store: saved day reports and check state.
 """
 
 from datetime import date
-from pathlib import Path
 
 import pytest
 

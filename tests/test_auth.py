@@ -80,7 +80,9 @@ def test_no_token_file_means_login_needed(token_file):
 
 
 def test_rejected_refresh_means_login_needed(old_token, monkeypatch):
-    monkeypatch.setattr(auth.requests, "post", lambda *a, **k: FakeResponse(400, {"error": "invalid_grant"}))
+    monkeypatch.setattr(
+        auth.requests, "post", lambda *a, **k: FakeResponse(400, {"error": "invalid_grant"})
+    )
     with pytest.raises(auth.LoginNeeded):
         auth.get_access_token()
 
@@ -106,7 +108,9 @@ def test_server_error_is_a_network_failure(old_token, monkeypatch):
 
 def test_held_lock_gives_up_after_timeout(old_token, monkeypatch):
     monkeypatch.setattr(auth, "TOKEN_LOCK_TIMEOUT", 0.2)
-    monkeypatch.setattr(auth.requests, "post", lambda *a, **k: pytest.fail("refreshed without the lock"))
+    monkeypatch.setattr(
+        auth.requests, "post", lambda *a, **k: pytest.fail("refreshed without the lock")
+    )
     with open(auth.TOKEN_LOCK_FILE, "w") as held:
         fcntl.flock(held, fcntl.LOCK_EX)
         with pytest.raises(auth.TokenLockBusy):
@@ -133,7 +137,9 @@ def test_non_interactive_connect_never_starts_device_login(token_file, monkeypat
         TadoClient().connect(interactive=False)
 
 
-def test_interactive_connect_reports_network_failure_without_prompting(old_token, monkeypatch, capsys):
+def test_interactive_connect_reports_network_failure_without_prompting(
+    old_token, monkeypatch, capsys
+):
     def offline(*a, **k):
         raise requests.ConnectionError("no route")
 

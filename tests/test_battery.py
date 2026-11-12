@@ -103,18 +103,35 @@ class FakeReportClient:
         return True
 
     def get_devices(self):
-        return [{"serialNo": "VA1", "shortSerialNo": "VA1", "deviceType": "VA01", "batteryState": "NORMAL"}]
+        return [
+            {
+                "serialNo": "VA1",
+                "shortSerialNo": "VA1",
+                "deviceType": "VA01",
+                "batteryState": "NORMAL",
+            }
+        ]
 
     def get_zones(self):
         return [{"name": "Lounge", "devices": [{"serialNo": "VA1"}]}]
 
 
-def test_report_shows_the_last_lifespan_after_a_replacement(frozen_today, history_file, monkeypatch):
-    history_file.write_text(json.dumps({"devices": {"VA1": {
-        "good_since": "2026-08-20",
-        "low_since": None,
-        "past_batteries": [{"days": 111, "minimum": False}],
-    }}}))
+def test_report_shows_the_last_lifespan_after_a_replacement(
+    frozen_today, history_file, monkeypatch
+):
+    history_file.write_text(
+        json.dumps(
+            {
+                "devices": {
+                    "VA1": {
+                        "good_since": "2026-08-20",
+                        "low_since": None,
+                        "past_batteries": [{"days": 111, "minimum": False}],
+                    }
+                }
+            }
+        )
+    )
     monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
 
     result = CliRunner().invoke(battery_mod.battery_command)
@@ -131,7 +148,10 @@ TWO_SPELLS = [{"from": "2026-08-20", "to": "2026-08-21"}, {"from": "2026-08-24",
 
 
 def test_format_lows_shows_first_latest_and_count():
-    assert click.unstyle(battery_mod._format_lows(TWO_SPELLS, is_low=True)) == "2026-08-20  2026-08-24     2"
+    assert (
+        click.unstyle(battery_mod._format_lows(TWO_SPELLS, is_low=True))
+        == "2026-08-20  2026-08-24     2"
+    )
 
 
 def test_format_lows_is_blank_for_a_device_never_low():
@@ -146,11 +166,22 @@ def test_format_lows_is_red_only_while_the_device_is_low():
 
 
 def test_report_shows_low_history_for_a_device_now_normal(frozen_today, history_file, monkeypatch):
-    history_file.write_text(json.dumps({"devices": {"VA1": {
-        "good_since": "2026-05-01",
-        "low_since": "2026-08-20",
-        "low_periods": [{"from": "2026-08-20", "to": "2026-08-21"}, {"from": "2026-08-24", "to": "2026-08-24"}],
-    }}}))
+    history_file.write_text(
+        json.dumps(
+            {
+                "devices": {
+                    "VA1": {
+                        "good_since": "2026-05-01",
+                        "low_since": "2026-08-20",
+                        "low_periods": [
+                            {"from": "2026-08-20", "to": "2026-08-21"},
+                            {"from": "2026-08-24", "to": "2026-08-24"},
+                        ],
+                    }
+                }
+            }
+        )
+    )
     monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
 
     result = CliRunner().invoke(battery_mod.battery_command)
@@ -185,13 +216,29 @@ def test_average_is_none_without_a_measured_lifespan(lifespans):
 
 
 def _past(fitted, days, minimum=False):
-    return {"fitted": fitted, "went_low": "2026-11-09", "replaced": "2026-11-10", "days": days, "minimum": minimum}
+    return {
+        "fitted": fitted,
+        "went_low": "2026-11-09",
+        "replaced": "2026-11-10",
+        "days": days,
+        "minimum": minimum,
+    }
 
 
 def _seed_history(history_file, past_batteries):
-    history_file.write_text(json.dumps({"devices": {
-        "VA1": {"good_since": "2026-11-10", "low_since": None, "past_batteries": past_batteries},
-    }}))
+    history_file.write_text(
+        json.dumps(
+            {
+                "devices": {
+                    "VA1": {
+                        "good_since": "2026-11-10",
+                        "low_since": None,
+                        "past_batteries": past_batteries,
+                    },
+                }
+            }
+        )
+    )
 
 
 def test_history_lists_every_past_battery(frozen_today, history_file, monkeypatch):
@@ -208,11 +255,14 @@ def test_history_lists_every_past_battery(frozen_today, history_file, monkeypatc
 
 
 def test_history_shows_the_average_and_what_it_left_out(frozen_today, history_file, monkeypatch):
-    _seed_history(history_file, [
-        _past("2026-04-19", 200),
-        _past("2026-04-20", 100),
-        _past("2026-04-17", 206, minimum=True),
-    ])
+    _seed_history(
+        history_file,
+        [
+            _past("2026-04-19", 200),
+            _past("2026-04-20", 100),
+            _past("2026-04-17", 206, minimum=True),
+        ],
+    )
     monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
 
     result = CliRunner().invoke(battery_mod.battery_history_command)
@@ -222,7 +272,9 @@ def test_history_shows_the_average_and_what_it_left_out(frozen_today, history_fi
 
 
 def test_history_says_so_when_nothing_has_been_replaced(frozen_today, history_file, monkeypatch):
-    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-04-17", "low_since": None}}}))
+    history_file.write_text(
+        json.dumps({"devices": {"VA1": {"good_since": "2026-04-17", "low_since": None}}})
+    )
     monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
 
     result = CliRunner().invoke(battery_mod.battery_history_command)
@@ -230,7 +282,9 @@ def test_history_says_so_when_nothing_has_been_replaced(frozen_today, history_fi
     assert "No replaced batteries recorded yet." in result.output
 
 
-def test_history_still_lists_batteries_when_tado_is_unavailable(frozen_today, history_file, monkeypatch):
+def test_history_still_lists_batteries_when_tado_is_unavailable(
+    frozen_today, history_file, monkeypatch
+):
     """Room names need the API, but the history itself is local."""
 
     class OfflineClient(FakeReportClient):
@@ -265,15 +319,19 @@ def test_on_low_is_a_minimum_when_replaced_before_it_died():
 def test_report_records_a_low_device_that_has_gone_offline(frozen_today, history_file, monkeypatch):
     class DeadDeviceClient(FakeReportClient):
         def get_devices(self):
-            return [{
-                "serialNo": "VA1",
-                "shortSerialNo": "VA1",
-                "deviceType": "VA01",
-                "batteryState": "LOW",
-                "connectionState": {"value": False},
-            }]
+            return [
+                {
+                    "serialNo": "VA1",
+                    "shortSerialNo": "VA1",
+                    "deviceType": "VA01",
+                    "batteryState": "LOW",
+                    "connectionState": {"value": False},
+                }
+            ]
 
-    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": "2026-08-20"}}}))
+    history_file.write_text(
+        json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": "2026-08-20"}}})
+    )
     monkeypatch.setattr(battery_mod, "TadoClient", DeadDeviceClient)
 
     CliRunner().invoke(battery_mod.battery_command)
@@ -282,10 +340,13 @@ def test_report_records_a_low_device_that_has_gone_offline(frozen_today, history
 
 
 def test_history_shows_time_on_low_and_its_average(frozen_today, history_file, monkeypatch):
-    _seed_history(history_file, [
-        {**_past("2026-04-19", 204), "died": "2026-11-10"},  # 1 day on low, then died
-        _past("2026-04-20", 203),  # replaced after 1 day, still going
-    ])
+    _seed_history(
+        history_file,
+        [
+            {**_past("2026-04-19", 204), "died": "2026-11-10"},  # 1 day on low, then died
+            _past("2026-04-20", 203),  # replaced after 1 day, still going
+        ],
+    )
     monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
 
     result = CliRunner().invoke(battery_mod.battery_history_command)
@@ -308,11 +369,22 @@ def test_history_has_no_low_average_until_one_has_died(frozen_today, history_fil
 
 
 def test_history_lists_low_spells_before_any_replacement(frozen_today, history_file, monkeypatch):
-    history_file.write_text(json.dumps({"devices": {"VA1": {
-        "good_since": "2026-05-01",
-        "low_since": "2026-08-20",
-        "low_periods": [{"from": "2026-08-20", "to": "2026-08-21"}, {"from": "2026-08-24", "to": None}],
-    }}}))
+    history_file.write_text(
+        json.dumps(
+            {
+                "devices": {
+                    "VA1": {
+                        "good_since": "2026-05-01",
+                        "low_since": "2026-08-20",
+                        "low_periods": [
+                            {"from": "2026-08-20", "to": "2026-08-21"},
+                            {"from": "2026-08-24", "to": None},
+                        ],
+                    }
+                }
+            }
+        )
+    )
     monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
 
     result = CliRunner().invoke(battery_mod.battery_history_command)
@@ -323,7 +395,9 @@ def test_history_lists_low_spells_before_any_replacement(frozen_today, history_f
     assert "No replaced batteries" not in result.output
 
 
-def test_history_keeps_showing_low_spells_of_replaced_batteries(frozen_today, history_file, monkeypatch):
+def test_history_keeps_showing_low_spells_of_replaced_batteries(
+    frozen_today, history_file, monkeypatch
+):
     spell = {"from": "2026-07-01", "to": "2026-07-02"}
     _seed_history(history_file, [{**_past("2026-04-19", 204), "low_periods": [spell]}])
     monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
@@ -337,17 +411,23 @@ def test_history_keeps_showing_low_spells_of_replaced_batteries(frozen_today, hi
 
 
 def test_replaced_command_saves_the_lifespan(frozen_today, history_file):
-    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": "2026-08-20"}}}))
+    history_file.write_text(
+        json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": "2026-08-20"}}})
+    )
 
     result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"])
 
     assert result.exit_code == 0
     assert "111" in result.output
-    assert json.loads(history_file.read_text())["devices"]["VA1"]["past_batteries"][0]["days"] == 111
+    assert (
+        json.loads(history_file.read_text())["devices"]["VA1"]["past_batteries"][0]["days"] == 111
+    )
 
 
 def test_replaced_command_keeps_a_never_low_battery_as_a_minimum(frozen_today, history_file):
-    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}}))
+    history_file.write_text(
+        json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}})
+    )
 
     result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"])
 
@@ -359,7 +439,9 @@ def test_replaced_command_keeps_a_never_low_battery_as_a_minimum(frozen_today, h
 
 
 def test_replaced_command_twice_in_a_day_changes_nothing(frozen_today, history_file):
-    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}}))
+    history_file.write_text(
+        json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}})
+    )
     runner = CliRunner()
     runner.invoke(battery_mod.battery_replaced_command, ["va1"])
 
@@ -376,13 +458,27 @@ def test_on_low_is_none_for_a_battery_that_never_went_low():
 
 
 def test_history_shows_a_never_low_battery(frozen_today, history_file, monkeypatch):
-    history_file.write_text(json.dumps({"devices": {"VA1": {
-        "good_since": "2026-08-25",
-        "low_since": None,
-        "past_batteries": [
-            {"fitted": "2026-05-01", "went_low": None, "replaced": "2026-08-25", "days": 116, "minimum": True},
-        ],
-    }}}))
+    history_file.write_text(
+        json.dumps(
+            {
+                "devices": {
+                    "VA1": {
+                        "good_since": "2026-08-25",
+                        "low_since": None,
+                        "past_batteries": [
+                            {
+                                "fitted": "2026-05-01",
+                                "went_low": None,
+                                "replaced": "2026-08-25",
+                                "days": 116,
+                                "minimum": True,
+                            },
+                        ],
+                    }
+                }
+            }
+        )
+    )
     monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
 
     result = CliRunner().invoke(battery_mod.battery_history_command)
@@ -393,7 +489,9 @@ def test_history_shows_a_never_low_battery(frozen_today, history_file, monkeypat
     assert "Average on low" not in result.output
 
 
-def test_damaged_history_stops_the_report_with_a_clear_message(frozen_today, history_file, monkeypatch):
+def test_damaged_history_stops_the_report_with_a_clear_message(
+    frozen_today, history_file, monkeypatch
+):
     history_file.write_text("{ not json at all")
     monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
 
@@ -415,10 +513,12 @@ def test_replaced_command_refuses_an_unknown_serial(frozen_today, history_file):
 
 
 def test_maps_serial_numbers_to_zone_names():
-    client = FakeClient([
-        {"name": "Lounge", "devices": [{"serialNo": "AAA"}, {"serialNo": "BBB"}]},
-        {"name": "Kitchen", "devices": [{"serialNo": "CCC"}]},
-    ])
+    client = FakeClient(
+        [
+            {"name": "Lounge", "devices": [{"serialNo": "AAA"}, {"serialNo": "BBB"}]},
+            {"name": "Kitchen", "devices": [{"serialNo": "CCC"}]},
+        ]
+    )
 
     assert _get_device_zone_map(client) == {
         "AAA": "Lounge",
@@ -434,9 +534,11 @@ def test_zone_without_a_name_falls_back_to_unknown():
 
 
 def test_devices_without_a_serial_are_skipped():
-    client = FakeClient([
-        {"name": "Lounge", "devices": [{"serialNo": "AAA"}, {"shortSerialNo": "no-serial"}]},
-    ])
+    client = FakeClient(
+        [
+            {"name": "Lounge", "devices": [{"serialNo": "AAA"}, {"shortSerialNo": "no-serial"}]},
+        ]
+    )
 
     assert _get_device_zone_map(client) == {"AAA": "Lounge"}
 
@@ -457,9 +559,13 @@ def test_returns_empty_map_when_zones_unavailable(zones):
 
 
 def test_reading_command_saves_a_reading(frozen_today, history_file):
-    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": "2026-08-20"}}}))
+    history_file.write_text(
+        json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": "2026-08-20"}}})
+    )
 
-    result = CliRunner().invoke(battery_mod.battery_reading_command, ["va1", "30", "40", "--note", "left in"])
+    result = CliRunner().invoke(
+        battery_mod.battery_reading_command, ["va1", "30", "40", "--note", "left in"]
+    )
 
     assert result.exit_code == 0, result.output
     saved = json.loads(history_file.read_text())["devices"]["VA1"]["meter_readings"]
@@ -468,18 +574,26 @@ def test_reading_command_saves_a_reading(frozen_today, history_file):
 
 
 def test_reading_command_takes_an_earlier_date(frozen_today, history_file):
-    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}}))
+    history_file.write_text(
+        json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}})
+    )
 
-    result = CliRunner().invoke(battery_mod.battery_reading_command, ["VA1", "90", "90", "--date", "2026-08-20"])
+    result = CliRunner().invoke(
+        battery_mod.battery_reading_command, ["VA1", "90", "90", "--date", "2026-08-20"]
+    )
 
     assert result.exit_code == 0, result.output
     saved = json.loads(history_file.read_text())["devices"]["VA1"]["meter_readings"]
     assert saved[0]["date"] == "2026-08-20"
 
 
-@pytest.mark.parametrize("args", [["VA1"], ["VA1", "101"], ["VA1", "-1"], ["VA1", "50", "--date", "2026-08-26"]])
+@pytest.mark.parametrize(
+    "args", [["VA1"], ["VA1", "101"], ["VA1", "-1"], ["VA1", "50", "--date", "2026-08-26"]]
+)
 def test_reading_command_refuses_bad_input(frozen_today, history_file, args):
-    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}}))
+    history_file.write_text(
+        json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}})
+    )
 
     result = CliRunner().invoke(battery_mod.battery_reading_command, args)
 
@@ -487,21 +601,45 @@ def test_reading_command_refuses_bad_input(frozen_today, history_file, args):
     assert "meter_readings" not in history_file.read_text()
 
 
-def test_reading_command_puts_an_old_set_reading_on_the_batteries_taken_out(frozen_today, history_file):
-    old = {"fitted": "2026-05-01", "went_low": None, "replaced": "2026-08-20", "days": 111, "minimum": True}
-    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-08-20", "low_since": None, "past_batteries": [old]}}}))
+def test_reading_command_puts_an_old_set_reading_on_the_batteries_taken_out(
+    frozen_today, history_file
+):
+    old = {
+        "fitted": "2026-05-01",
+        "went_low": None,
+        "replaced": "2026-08-20",
+        "days": 111,
+        "minimum": True,
+    }
+    history_file.write_text(
+        json.dumps(
+            {
+                "devices": {
+                    "VA1": {"good_since": "2026-08-20", "low_since": None, "past_batteries": [old]}
+                }
+            }
+        )
+    )
 
-    result = CliRunner().invoke(battery_mod.battery_reading_command, ["VA1", "50", "50", "--old-set"])
+    result = CliRunner().invoke(
+        battery_mod.battery_reading_command, ["VA1", "50", "50", "--old-set"]
+    )
 
     assert result.exit_code == 0, result.output
     assert "taken out on 2026-08-20" in result.output
     saved = json.loads(history_file.read_text())["devices"]["VA1"]
-    assert saved["past_batteries"][0]["meter_readings"] == [{"date": "2026-08-20", "percent": [50, 50]}]
+    assert saved["past_batteries"][0]["meter_readings"] == [
+        {"date": "2026-08-20", "percent": [50, 50]}
+    ]
     assert "meter_readings" not in saved
 
 
-def test_reading_command_refuses_an_old_set_reading_with_nothing_taken_out(frozen_today, history_file):
-    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}}))
+def test_reading_command_refuses_an_old_set_reading_with_nothing_taken_out(
+    frozen_today, history_file
+):
+    history_file.write_text(
+        json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}})
+    )
 
     result = CliRunner().invoke(battery_mod.battery_reading_command, ["VA1", "50", "--old-set"])
 
@@ -519,13 +657,30 @@ def test_reading_command_refuses_an_unknown_device(frozen_today, history_file):
     assert "No battery history for VA9" in result.output
 
 
-def test_history_lists_meter_readings_now_and_from_replaced_batteries(frozen_today, history_file, monkeypatch):
-    history_file.write_text(json.dumps({"devices": {"VA1": {
-        "good_since": "2026-05-01",
-        "low_since": None,
-        "meter_readings": [{"date": "2026-08-24", "percent": [30, 40], "note": "left in"}],
-        "past_batteries": [{**_past("2026-04-19", 204), "meter_readings": [{"date": "2026-07-01", "percent": [90, 90]}]}],
-    }}}))
+def test_history_lists_meter_readings_now_and_from_replaced_batteries(
+    frozen_today, history_file, monkeypatch
+):
+    history_file.write_text(
+        json.dumps(
+            {
+                "devices": {
+                    "VA1": {
+                        "good_since": "2026-05-01",
+                        "low_since": None,
+                        "meter_readings": [
+                            {"date": "2026-08-24", "percent": [30, 40], "note": "left in"}
+                        ],
+                        "past_batteries": [
+                            {
+                                **_past("2026-04-19", 204),
+                                "meter_readings": [{"date": "2026-07-01", "percent": [90, 90]}],
+                            }
+                        ],
+                    }
+                }
+            }
+        )
+    )
     monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
 
     result = CliRunner().invoke(battery_mod.battery_history_command)
@@ -537,11 +692,19 @@ def test_history_lists_meter_readings_now_and_from_replaced_batteries(frozen_tod
 
 
 def test_history_shows_meter_readings_on_their_own(frozen_today, history_file, monkeypatch):
-    history_file.write_text(json.dumps({"devices": {"VA1": {
-        "good_since": "2026-05-01",
-        "low_since": None,
-        "meter_readings": [{"date": "2026-08-24", "percent": [70]}],
-    }}}))
+    history_file.write_text(
+        json.dumps(
+            {
+                "devices": {
+                    "VA1": {
+                        "good_since": "2026-05-01",
+                        "low_since": None,
+                        "meter_readings": [{"date": "2026-08-24", "percent": [70]}],
+                    }
+                }
+            }
+        )
+    )
     monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
 
     result = CliRunner().invoke(battery_mod.battery_history_command)
@@ -557,17 +720,20 @@ from commands.battery import _match_rooms
 ROOMS = ["Bathroom", "Downstairs Loo", "Hall", "Kitchen", "Main Bedroom", "Spare Bedroom"]
 
 
-@pytest.mark.parametrize("query,expected,close", [
-    ("hall", ["Hall"], False),
-    ("downstairs-loo", ["Downstairs Loo"], False),
-    ("loo", ["Downstairs Loo"], False),
-    ("bedroom", ["Main Bedroom", "Spare Bedroom"], False),
-    ("kitchn", ["Kitchen"], True),
-    ("bathrm", ["Bathroom"], True),
-    ("dwnstairs loo", ["Downstairs Loo"], True),
-    ("garage", [], True),
-    ("", [], False),
-])
+@pytest.mark.parametrize(
+    "query,expected,close",
+    [
+        ("hall", ["Hall"], False),
+        ("downstairs-loo", ["Downstairs Loo"], False),
+        ("loo", ["Downstairs Loo"], False),
+        ("bedroom", ["Main Bedroom", "Spare Bedroom"], False),
+        ("kitchn", ["Kitchen"], True),
+        ("bathrm", ["Bathroom"], True),
+        ("dwnstairs loo", ["Downstairs Loo"], True),
+        ("garage", [], True),
+        ("", [], False),
+    ],
+)
 def test_match_rooms(query, expected, close):
     assert _match_rooms(query, ROOMS) == (expected, close)
 
@@ -586,10 +752,12 @@ class FakeRoomClient:
         ]
 
 
-ROOM_HISTORY = {"devices": {
-    serial: {"good_since": "2026-05-01", "low_since": "2026-08-20"}
-    for serial in ["VA1", "VA2", "VA3", "VA4", "SU3893321984"]
-}}
+ROOM_HISTORY = {
+    "devices": {
+        serial: {"good_since": "2026-05-01", "low_since": "2026-08-20"}
+        for serial in ["VA1", "VA2", "VA3", "VA4", "SU3893321984"]
+    }
+}
 
 
 @pytest.fixture
@@ -637,7 +805,10 @@ def test_reading_command_takes_a_room_name(rooms):
     result = CliRunner().invoke(battery_mod.battery_reading_command, ["kitchen", "30", "40"])
 
     assert result.exit_code == 0, result.output
-    assert json.loads(rooms.read_text())["devices"]["VA2"]["meter_readings"][0]["percent"] == [30, 40]
+    assert json.loads(rooms.read_text())["devices"]["VA2"]["meter_readings"][0]["percent"] == [
+        30,
+        40,
+    ]
 
 
 def test_a_serial_never_contacts_tado(frozen_today, history_file, monkeypatch):
@@ -670,9 +841,17 @@ def _offered(incomplete):
 
 def test_completion_offers_rooms_then_serials(frozen_today, history_file, room_names_file):
     history_file.write_text(json.dumps(ROOM_HISTORY))
-    room_names_file.write_text(json.dumps(
-        {"VA1": "Hall", "SU3893321984": "Hall", "VA2": "Kitchen", "VA3": "Main Bedroom", "VA4": "Main Bedroom"}
-    ))
+    room_names_file.write_text(
+        json.dumps(
+            {
+                "VA1": "Hall",
+                "SU3893321984": "Hall",
+                "VA2": "Kitchen",
+                "VA3": "Main Bedroom",
+                "VA4": "Main Bedroom",
+            }
+        )
+    )
 
     assert _offered("") == [
         ("Hall", "VA1"),
@@ -687,7 +866,9 @@ def test_completion_offers_rooms_then_serials(frozen_today, history_file, room_n
     assert _offered("va2") == [("VA2", "Kitchen")]
 
 
-def test_completion_never_contacts_tado_and_copes_without_room_names(frozen_today, history_file, monkeypatch):
+def test_completion_never_contacts_tado_and_copes_without_room_names(
+    frozen_today, history_file, monkeypatch
+):
     history_file.write_text(json.dumps(ROOM_HISTORY))
     monkeypatch.setattr(battery_mod, "TadoClient", None)
 

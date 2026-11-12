@@ -4,6 +4,7 @@ Battery reporting command.
 
 import difflib
 import re
+from collections.abc import Sequence
 from datetime import date
 
 import click
@@ -11,7 +12,13 @@ from click.shell_completion import CompletionItem
 
 from core.client import TadoClient
 from core.storage import (
+    AlreadyReplacedToday,
+    BatteryHistory,
+    Lifespan,
+    LowPeriod,
+    MeterReading,
     NoOldBatteries,
+    PastBattery,
     add_meter_reading,
     load_battery_history,
     load_room_names,
@@ -26,6 +33,14 @@ AGE_BANDS = ["bright_green", "bright_cyan", "bright_yellow", "bright_magenta", "
 # Devices that are mains-wired despite reporting a batteryState. The hall thermostat
 # is wired in, so its battery columns are meaningless — reported as N/A.
 MAINS_WIRED_SERIALS = {"SU3893321984"}
+
+# Shown in a table cell that has nothing to show.
+NO_VALUE = "—"
+
+
+def _count(number: int, noun: str) -> str:
+    """ "1 set", "2 sets"."""
+    return f"{number} {noun}{'s' if number != 1 else ''}"
 
 
 def _days_since(iso_date: str | None) -> int | None:
@@ -44,7 +59,7 @@ def _age_colour(days: int) -> str:
     return AGE_BANDS[band]
 
 
-def _format_last(past_batteries: list[dict]) -> str:
+def _format_last(past_batteries: Sequence[Lifespan]) -> str:
     """Format how long the previous battery lasted, marking unknown-age ones as a minimum."""
     if not past_batteries:
         return f"{'':>6}"
@@ -53,7 +68,7 @@ def _format_last(past_batteries: list[dict]) -> str:
     return click.style(f"{label:>6}", fg=_age_colour(last["days"]), bold=True)
 
 
-def _format_lows(periods: list[dict], is_low: bool) -> str:
+def _format_lows(periods: list[LowPeriod], is_low: bool) -> str:
     """Format the first low warning, the latest and how many; red only while still low."""
     if not periods:
         return " " * 28
@@ -61,7 +76,7 @@ def _format_lows(periods: list[dict], is_low: bool) -> str:
     return click.style(text, fg="red") if is_low else text
 
 
-def _average_days(lifespans: list[dict]) -> int | None:
+def _average_days(lifespans: Sequence[Lifespan]) -> int | None:
     """Average the measured lifespans, leaving out unknown-age minimums."""
     measured = [b["days"] for b in lifespans if not b.get("minimum")]
     if not measured:
@@ -69,13 +84,19 @@ def _average_days(lifespans: list[dict]) -> int | None:
     return round(sum(measured) / len(measured))
 
 
-def _on_low(battery: dict) -> dict | None:
+def _on_low(battery: PastBattery) -> Lifespan | None:
     """How long a battery kept going once low; a minimum if it was replaced before dying."""
-    if not battery.get("went_low"):
+    if not (went_low := battery["went_low"]):
         return None  # taken out before it ever warned
     died = battery.get("died")
     end = date.fromisoformat(died or battery["replaced"])
-    return {"days": (end - date.fromisoformat(battery["went_low"])).days, "minimum": not died}
+    return {"days": (end - date.fromisoformat(went_low)).days, "minimum": not died}
+
+
+def _format_on_low(battery: PastBattery) -> str:
+    """The On low column: a dash for a set taken out before it ever warned."""
+    on_low = _on_low(battery)
+    return _format_last([on_low]) if on_low else f"{NO_VALUE:>6}"
 
 
 def _get_device_zone_map(client: TadoClient) -> dict:
@@ -149,12 +170,8 @@ def _complete_device(ctx, param, incomplete: str) -> list[CompletionItem]:
         return []
     serials = sorted(s for s in history if s not in MAINS_WIRED_SERIALS)
     room_names = load_room_names()
+    rooms = _rooms_with_batteries(history, room_names)
     wanted = _squash(incomplete)
-
-    rooms: dict[str, list[str]] = {}
-    for serial in serials:
-        if serial in room_names:
-            rooms.setdefault(room_names[serial], []).append(serial)
 
     items = [
         CompletionItem(room, help=", ".join(found))
@@ -167,6 +184,21 @@ def _complete_device(ctx, param, incomplete: str) -> list[CompletionItem]:
         if serial.lower().startswith(incomplete.lower())
     ]
     return items
+
+
+def _rooms_with_batteries(history: BatteryHistory, room_of: dict[str, str]) -> dict[str, list[str]]:
+    """Group the battery devices in HISTORY by room, using a serial-to-room map."""
+    rooms: dict[str, list[str]] = {}
+    for serial, room in sorted(room_of.items()):
+        if serial in history and serial not in MAINS_WIRED_SERIALS:
+            rooms.setdefault(room, []).append(serial)
+    return rooms
+
+
+def _label_if_low(serial: str, history: BatteryHistory) -> str:
+    """The serial, marked "(low)" while its batteries are low, to help pick between two."""
+    periods = history[serial].get("low_periods", [])
+    return f"{serial} (low)" if periods and periods[-1].get("to") is None else serial
 
 
 def _resolve_device(name: str, action: str) -> str:
@@ -182,30 +214,25 @@ def _resolve_device(name: str, action: str) -> str:
     history = load_battery_history()
     client = TadoClient()
     if not client.connect():
-        raise click.ClickException("Couldn't reach Tado to look up room names. Use the device's serial instead.")
-    device_zones = _get_device_zone_map(client)
-
-    rooms: dict[str, list[str]] = {}
-    for serial, zone in device_zones.items():
-        if serial in history and serial not in MAINS_WIRED_SERIALS:
-            rooms.setdefault(zone, []).append(serial)
+        raise click.ClickException(
+            "Couldn't reach Tado to look up room names. Use the device's serial instead."
+        )
+    rooms = _rooms_with_batteries(history, _get_device_zone_map(client))
 
     found, close_only = _match_rooms(name, sorted(rooms))
     if not found:
         raise click.ClickException(
-            f"No room matches \"{name}\". Rooms with battery devices: {', '.join(sorted(rooms))}."
+            f'No room matches "{name}". Rooms with battery devices: {", ".join(sorted(rooms))}.'
         )
     if len(found) > 1:
-        raise click.ClickException(f"\"{name}\" could be {', '.join(found)}. Be more specific.")
+        raise click.ClickException(f'"{name}" could be {", ".join(found)}. Be more specific.')
 
     room = found[0]
-    serials = sorted(rooms[room])
+    serials = rooms[room]
     if len(serials) > 1:
-        def label(serial: str) -> str:
-            periods = history[serial].get("low_periods", [])
-            return f"{serial} (low)" if periods and periods[-1].get("to") is None else serial
+        labels = ", ".join(_label_if_low(serial, history) for serial in serials)
         raise click.ClickException(
-            f"{room} has {len(serials)} battery devices: {', '.join(label(s) for s in serials)}. Give the serial instead."
+            f"{room} has {len(serials)} battery devices: {labels}. Give the serial instead."
         )
 
     serial = serials[0]
@@ -217,7 +244,9 @@ def _resolve_device(name: str, action: str) -> str:
 
 
 @click.command("battery")
-@click.option("-r", "--room", default=None, help="Filter by room/zone name (case-insensitive substring).")
+@click.option(
+    "-r", "--room", default=None, help="Filter by room/zone name (case-insensitive substring)."
+)
 def battery_command(room):
     """Show battery status for all battery-powered devices."""
     client = TadoClient()
@@ -229,41 +258,48 @@ def battery_command(room):
         click.echo("No devices found.")
         return
 
-    # Build zone mapping
-    device_zones = _get_device_zone_map(client)
-
-    # Filter to battery-powered devices
-    battery_devices = []
-    for device in devices:
-        battery_state = device.get("batteryState")
-        if battery_state is None:
-            continue
-
-        serial = device.get("serialNo", "")
-        zone_name = device_zones.get(serial, "Unassigned")
-
-        # Apply room filter
-        if room and room.lower() not in zone_name.lower():
-            continue
-
-        battery_devices.append({
-            "serial": serial,
-            "mains": serial in MAINS_WIRED_SERIALS,
-            "name": device.get("shortSerialNo", serial),
-            "type": device.get("deviceType", "Unknown"),
-            "zone": zone_name,
-            "battery": battery_state,
-            "connection": device.get("connectionState", {}).get("value", False),
-            "firmware": device.get("currentFwVersion", ""),
-        })
-
+    battery_devices = _battery_devices(devices, _get_device_zone_map(client), room)
     if not battery_devices:
         click.echo("No battery-powered devices found.")
         return
 
-    # Update persistent history and get date fields
-    current_states = {d["serial"]: d["battery"] for d in battery_devices if not d["mains"]}
-    disconnected = {d["serial"] for d in battery_devices if not d["mains"] and not d["connection"]}
+    _add_history(battery_devices)
+    battery_devices.sort(key=lambda d: (d["zone"], d["type"], d["name"]))
+    _print_battery_table(battery_devices)
+    _print_battery_summary(battery_devices)
+
+
+def _battery_devices(devices: list[dict], device_zones: dict, room: str | None) -> list[dict]:
+    """The devices that report a battery state, in ROOM if given, as report rows."""
+    rows = []
+    for device in devices:
+        battery_state = device.get("batteryState")
+        if battery_state is None:
+            continue
+        serial = device.get("serialNo", "")
+        zone_name = device_zones.get(serial, "Unassigned")
+        if room and room.lower() not in zone_name.lower():
+            continue
+        rows.append(
+            {
+                "serial": serial,
+                "mains": serial in MAINS_WIRED_SERIALS,
+                "name": device.get("shortSerialNo", serial),
+                "type": device.get("deviceType", "Unknown"),
+                "zone": zone_name,
+                "battery": battery_state,
+                "connection": device.get("connectionState", {}).get("value", False),
+                "firmware": device.get("currentFwVersion", ""),
+            }
+        )
+    return rows
+
+
+def _add_history(battery_devices: list[dict]) -> None:
+    """Save today's states to the history, and add each device's dates to its row."""
+    on_battery = [d for d in battery_devices if not d["mains"]]
+    current_states = {d["serial"]: d["battery"] for d in on_battery}
+    disconnected = {d["serial"] for d in on_battery if not d["connection"]}
     history = update_battery_history(current_states, disconnected)
 
     for d in battery_devices:
@@ -272,15 +308,13 @@ def battery_command(room):
         d["low_periods"] = entry.get("low_periods", [])
         d["past_batteries"] = entry.get("past_batteries", [])
 
-    # Sort by zone, then device type
-    battery_devices.sort(key=lambda d: (d["zone"], d["type"], d["name"]))
 
-    # Calculate column widths
+def _print_battery_table(battery_devices: list[dict]) -> None:
+    """Print one row per device, under a header sized to fit."""
     zone_width = max(len(d["zone"]) for d in battery_devices)
     type_width = max(len(d["type"]) for d in battery_devices)
     name_width = max(len(d["name"]) for d in battery_devices)
 
-    # Header
     header = (
         f"  {'Zone':<{zone_width}}  "
         f"{'Type':<{type_width}}  "
@@ -298,74 +332,64 @@ def battery_command(room):
     click.echo(click.style(header, fg="bright_white", bold=True))
     click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
 
-    # Rows
-    low_count = 0
     for d in battery_devices:
-        # Mains-wired devices have no meaningful battery data
-        if d["mains"]:
-            battery_str = click.style(f"{'N/A':>8}", fg="bright_black")
-            good_str = click.style(f"{'N/A':<10}", fg="bright_black")
-            age_str = click.style(f"{'N/A':>6}", fg="bright_black")
-            last_str = click.style(f"{'N/A':>6}", fg="bright_black")
-            low_str = click.style(f"{'N/A':<10}  {'N/A':<10}  {'N/A':>4}", fg="bright_black")
-            conn_str = (
-                click.style(f"{'Yes':>9}", fg="green")
-                if d["connection"]
-                else click.style(f"{'No':>9}", fg="red")
-            )
-            click.echo(
-                f"  {d['zone']:<{zone_width}}  "
-                f"{d['type']:<{type_width}}  "
-                f"{d['name']:<{name_width}}  "
-                f"{battery_str}  {good_str}  {age_str}  {last_str}  {low_str}  {conn_str}"
-            )
-            continue
-
-        # Colour the battery status
-        if d["battery"] == "LOW":
-            battery_str = click.style(f"{'LOW':>8}", fg="red", bold=True)
-            low_count += 1
-        else:
-            battery_str = click.style(f"{'Normal':>8}", fg="green")
-
-        good_since = d["good_since"] or ""
-        good_str = f"{good_since:<10}"
-
-        # Days since the battery went in, coloured in 100-day bands
-        days = _days_since(d["good_since"])
-        if days is None:
-            age_str = f"{'—':>6}"
-        else:
-            age_str = click.style(f"{days:>5}d", fg=_age_colour(days), bold=True)
-
-        last_str = _format_last(d["past_batteries"])
-
-        low_str = _format_lows(d["low_periods"], d["battery"] == "LOW")
-
-        # Colour connection status
-        connected = d["connection"]
-        if connected:
-            conn_str = click.style(f"{'Yes':>9}", fg="green")
-        else:
-            conn_str = click.style(f"{'No':>9}", fg="red")
-
-        click.echo(
-            f"  {d['zone']:<{zone_width}}  "
-            f"{d['type']:<{type_width}}  "
-            f"{d['name']:<{name_width}}  "
-            f"{battery_str}  "
-            f"{good_str}  "
-            f"{age_str}  "
-            f"{last_str}  "
-            f"{low_str}  "
-            f"{conn_str}"
+        device = (
+            f"  {d['zone']:<{zone_width}}  {d['type']:<{type_width}}  {d['name']:<{name_width}}"
         )
+        cells = _mains_cells() if d["mains"] else _battery_cells(d)
+        click.echo("  ".join([device, *cells, _format_connected(d["connection"])]))
 
-    # Summary
+
+def _mains_cells() -> list[str]:
+    """The battery columns for a mains-wired device, which has no meaningful battery data."""
+    na = "N/A"
+    return [
+        click.style(f"{na:>8}", fg="bright_black"),
+        click.style(f"{na:<10}", fg="bright_black"),
+        click.style(f"{na:>6}", fg="bright_black"),
+        click.style(f"{na:>6}", fg="bright_black"),
+        click.style(f"{na:<10}  {na:<10}  {na:>4}", fg="bright_black"),
+    ]
+
+
+def _battery_cells(d: dict) -> list[str]:
+    """The battery columns: state, good since, age, last lifespan and low warnings."""
+    is_low = d["battery"] == "LOW"
+    if is_low:
+        battery_str = click.style(f"{'LOW':>8}", fg="red", bold=True)
+    else:
+        battery_str = click.style(f"{'Normal':>8}", fg="green")
+
+    # Days since the battery went in, coloured in 100-day bands
+    days = _days_since(d["good_since"])
+    if days is None:
+        age_str = f"{NO_VALUE:>6}"
+    else:
+        age_str = click.style(f"{days:>5}d", fg=_age_colour(days), bold=True)
+
+    return [
+        battery_str,
+        f"{d['good_since'] or '':<10}",
+        age_str,
+        _format_last(d["past_batteries"]),
+        _format_lows(d["low_periods"], is_low),
+    ]
+
+
+def _format_connected(connected: bool) -> str:
+    return (
+        click.style(f"{'Yes':>9}", fg="green") if connected else click.style(f"{'No':>9}", fg="red")
+    )
+
+
+def _print_battery_summary(battery_devices: list[dict]) -> None:
+    """Print the device count, how many are low, and the key to the age colours."""
     mains_count = sum(1 for d in battery_devices if d["mains"])
+    low_count = sum(1 for d in battery_devices if not d["mains"] and d["battery"] == "LOW")
     total = len(battery_devices) - mains_count
+
     click.echo()
-    summary = f"  {total} battery-powered device{'s' if total != 1 else ''}"
+    summary = f"  {_count(total, 'battery-powered device')}"
     if mains_count:
         summary += click.style(f" (+{mains_count} mains-wired)", fg="bright_black")
     if low_count:
@@ -374,10 +398,10 @@ def battery_command(room):
         summary += click.style(" (all normal)", fg="green")
     click.echo(summary)
 
-    # Age band legend
     labels = ["<100d", "100-199d", "200-299d", "300-399d", "400d+"]
     legend = "  ".join(
-        click.style(label, fg=colour, bold=True) for label, colour in zip(labels, AGE_BANDS)
+        click.style(label, fg=colour, bold=True)
+        for label, colour in zip(labels, AGE_BANDS, strict=True)
     )
     click.echo(click.style("  Age: ", fg="bright_black") + legend)
     click.echo()
@@ -386,7 +410,8 @@ def battery_command(room):
 @click.command("battery-replaced")
 @click.argument("device", shell_complete=_complete_device)
 def battery_replaced_command(device):
-    """Record that you have replaced the batteries in DEVICE (a serial, or a room name, roughly).
+    """Record that you have replaced the batteries in DEVICE (a serial, or a room
+    name, roughly).
 
     If you measured the old batteries, record that first with battery-reading,
     and it moves across with them:
@@ -398,25 +423,27 @@ def battery_replaced_command(device):
     Forgot? Add it afterwards with battery-reading --old-set.
     """
     serial = _resolve_device(device, "Record new batteries in")
-    entry = load_battery_history().get(serial, {})
-    if entry.get("good_since") == date.today().isoformat() and not entry.get("low_since"):
-        click.echo(f"{serial} was already marked as replaced today; nothing changed.")
-        return
     try:
         retired = mark_battery_replaced(serial)
     except KeyError:
         raise click.ClickException(f"No battery history for {serial}.")
+    except AlreadyReplacedToday:
+        click.echo(f"{serial} was already marked as replaced today; nothing changed.")
+        return
+    click.echo(f"{serial} marked as replaced. {_describe_retired(retired)}")
 
-    if retired and retired["went_low"] is None:
-        click.echo(
-            f"{serial} marked as replaced. The old set never gave a low warning; it was in for "
-            f"{retired['days']} days, saved as a minimum lifespan."
+
+def _describe_retired(retired: PastBattery | None) -> str:
+    """Say what was kept of the batteries just taken out."""
+    if retired is None:
+        return "The old set's dates were unusable, so no lifespan was saved."
+    if retired["went_low"] is None:
+        return (
+            f"The old set never gave a low warning; it was in for {retired['days']} days, "
+            "saved as a minimum lifespan."
         )
-    elif retired:
-        prefix = "at least " if retired["minimum"] else ""
-        click.echo(f"{serial} marked as replaced. The old set reached its low warning after {prefix}{retired['days']} days.")
-    else:
-        click.echo(f"{serial} marked as replaced. The old set's dates were unusable, so no lifespan was saved.")
+    prefix = "at least " if retired["minimum"] else ""
+    return f"The old set reached its low warning after {prefix}{retired['days']} days."
 
 
 def _format_percents(percents: list[int]) -> str:
@@ -426,7 +453,12 @@ def _format_percents(percents: list[int]) -> str:
 @click.command("battery-reading")
 @click.argument("device", shell_complete=_complete_device)
 @click.argument("percents", nargs=-1, required=True, type=click.IntRange(0, 100))
-@click.option("--date", "on", type=click.DateTime(formats=["%Y-%m-%d"]), help="Day of the reading (YYYY-MM-DD). Defaults to today.")
+@click.option(
+    "--date",
+    "on",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="Day of the reading (YYYY-MM-DD). Defaults to today.",
+)
 @click.option("--note", help="Anything worth keeping, such as whether the batteries went back in.")
 @click.option(
     "--old-set",
@@ -435,7 +467,8 @@ def _format_percents(percents: list[int]) -> str:
     "The date defaults to the day they came out.",
 )
 def battery_reading_command(device, percents, on, note, old_set):
-    """Record a battery meter's reading, one PERCENT per cell, for DEVICE (a serial, or a room name, roughly).
+    """Record a battery meter's reading, one PERCENT per cell, for DEVICE (a
+    serial, or a room name, roughly).
 
     The reading belongs to the batteries now in the device. When changing
     batteries, record the old ones' reading before battery-replaced, and it
@@ -449,21 +482,25 @@ def battery_reading_command(device, percents, on, note, old_set):
         raise click.BadParameter("can't be in the future.", param_hint="--date")
     serial = _resolve_device(device, f"Record {_format_percents(list(percents))} for")
     try:
-        reading = add_meter_reading(
-            serial, list(percents), on=on.date().isoformat() if on else None, note=note, old_set=old_set
+        reading, replaced = add_meter_reading(
+            serial,
+            list(percents),
+            on=on.date().isoformat() if on else None,
+            note=note,
+            old_set=old_set,
         )
     except KeyError:
         raise click.ClickException(f"No battery history for {serial}.")
     except NoOldBatteries:
         raise click.ClickException(f"{serial} has no replaced batteries to add a reading to.")
+
     message = f"{serial}: {_format_percents(reading['percent'])} recorded for {reading['date']}"
-    if old_set:
-        replaced = load_battery_history()[serial]["past_batteries"][-1]["replaced"]
+    if replaced:
         message += f", on the batteries taken out on {replaced}"
     click.echo(message + ".")
 
 
-def _print_meter_readings(readings: list[tuple[str, dict]], device_zones: dict) -> None:
+def _print_meter_readings(readings: list[tuple[str, MeterReading]], device_zones: dict) -> None:
     """Print every battery meter reading taken, oldest first."""
     rows = sorted(
         ((device_zones.get(serial, "Unassigned"), serial, reading) for serial, reading in readings),
@@ -474,7 +511,10 @@ def _print_meter_readings(readings: list[tuple[str, dict]], device_zones: dict) 
     percents = [_format_percents(reading["percent"]) for _, _, reading in rows]
     percent_width = max(len("Reading"), *(len(p) for p in percents))
 
-    header = f"  {'Zone':<{zone_width}}  {'Serial':<{serial_width}}  {'Date':<10}  {'Reading':<{percent_width}}  Note"
+    header = (
+        f"  {'Zone':<{zone_width}}  {'Serial':<{serial_width}}  "
+        f"{'Date':<10}  {'Reading':<{percent_width}}  Note"
+    )
     click.echo(click.style("  Meter readings", fg="bright_white", bold=True))
     click.echo(click.style(header, fg="bright_white", bold=True))
     click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
@@ -486,10 +526,13 @@ def _print_meter_readings(readings: list[tuple[str, dict]], device_zones: dict) 
     click.echo()
 
 
-def _print_lifespans(lifespans: list[tuple[str, dict]], device_zones: dict) -> None:
+def _print_lifespans(lifespans: list[tuple[str, PastBattery]], device_zones: dict) -> None:
     """Print the table of replaced batteries and their averages."""
     rows = sorted(
-        ((device_zones.get(serial, "Unassigned"), serial, battery) for serial, battery in lifespans),
+        (
+            (device_zones.get(serial, "Unassigned"), serial, battery)
+            for serial, battery in lifespans
+        ),
         key=lambda row: (row[0], row[2]["fitted"]),
     )
     zone_width = max(len("Zone"), *(len(zone) for zone, _, _ in rows))
@@ -516,11 +559,15 @@ def _print_lifespans(lifespans: list[tuple[str, dict]], device_zones: dict) -> N
             f"{battery['went_low'] or 'never':<10}  "
             f"{battery['replaced']:<10}  "
             f"{_format_last([battery])}  "
-            f"{_format_last([on_low]) if (on_low := _on_low(battery)) else f'{chr(8212):>6}'}"
+            f"{_format_on_low(battery)}"
         )
 
+    _print_lifespan_averages([battery for _, battery in lifespans])
+
+
+def _print_lifespan_averages(all_batteries: list[PastBattery]) -> None:
+    """Print the average lifespan, and how long a low battery keeps going."""
     # Average of the sets whose real lifespan we know
-    all_batteries = [battery for _, battery in lifespans]
     measured = sum(1 for battery in all_batteries if not battery.get("minimum"))
     unknown = len(all_batteries) - measured
     average = _average_days(all_batteries)
@@ -529,7 +576,7 @@ def _print_lifespans(lifespans: list[tuple[str, dict]], device_zones: dict) -> N
     if average is None:
         click.echo("  Average: none yet, every set so far is of unknown age")
     else:
-        summary = f"  Average: {average}d from {measured} set{'s' if measured != 1 else ''}"
+        summary = f"  Average: {average}d from {_count(measured, 'set')}"
         if unknown:
             summary += click.style(f" ({unknown} of unknown age not counted)", fg="bright_black")
         click.echo(summary)
@@ -539,11 +586,11 @@ def _print_lifespans(lifespans: list[tuple[str, dict]], device_zones: dict) -> N
     low_average = _average_days(on_low)
     if low_average is not None:
         died = sum(1 for battery in on_low if not battery["minimum"])
-        click.echo(f"  Average on low: {low_average}d from {died} set{'s' if died != 1 else ''}")
+        click.echo(f"  Average on low: {low_average}d from {_count(died, 'set')}")
     click.echo()
 
 
-def _print_low_periods(lows: list[tuple[str, dict]], device_zones: dict) -> None:
+def _print_low_periods(lows: list[tuple[str, LowPeriod]], device_zones: dict) -> None:
     """Print every spell a device has spent reporting LOW."""
     rows = sorted(
         ((device_zones.get(serial, "Unassigned"), serial, period) for serial, period in lows),
@@ -585,10 +632,22 @@ def battery_history_command():
         for serial, entry in history.items()
         for battery in entry.get("past_batteries", [])
     ]
-    lows = [(serial, period) for serial, entry in history.items() for period in entry.get("low_periods", [])]
-    lows += [(serial, period) for serial, battery in lifespans for period in battery.get("low_periods", [])]
-    readings = [(serial, r) for serial, entry in history.items() for r in entry.get("meter_readings", [])]
-    readings += [(serial, r) for serial, battery in lifespans for r in battery.get("meter_readings", [])]
+    lows = [
+        (serial, period)
+        for serial, entry in history.items()
+        for period in entry.get("low_periods", [])
+    ]
+    lows += [
+        (serial, period)
+        for serial, battery in lifespans
+        for period in battery.get("low_periods", [])
+    ]
+    readings = [
+        (serial, r) for serial, entry in history.items() for r in entry.get("meter_readings", [])
+    ]
+    readings += [
+        (serial, r) for serial, battery in lifespans for r in battery.get("meter_readings", [])
+    ]
 
     if not lifespans and not lows and not readings:
         click.echo("No replaced batteries recorded yet.")

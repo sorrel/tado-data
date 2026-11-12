@@ -20,7 +20,11 @@ def _day_report_path(day: date, zone_id: int) -> str:
 
 
 def load_day_report(day: date, zone_id: int) -> dict | None:
-    """The saved report, or None if it hasn't been fetched. Raises BatteryHistoryError if damaged."""
+    """
+    The saved report, or None if it hasn't been fetched.
+
+    Raises BatteryHistoryError if it is damaged.
+    """
     path = _day_report_path(day, zone_id)
     if not os.path.exists(path):
         return None

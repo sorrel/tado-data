@@ -6,7 +6,7 @@ import textwrap
 
 import click
 
-from core.auth import device_code_flow, clear_tokens, load_tokens
+from core.auth import clear_tokens, device_code_flow, load_tokens
 from core.client import TadoClient
 
 
