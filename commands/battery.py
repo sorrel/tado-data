@@ -386,7 +386,17 @@ def battery_command(room):
 @click.command("battery-replaced")
 @click.argument("device", shell_complete=_complete_device)
 def battery_replaced_command(device):
-    """Record that you have replaced the batteries in DEVICE (a serial, or a room name, roughly)."""
+    """Record that you have replaced the batteries in DEVICE (a serial, or a room name, roughly).
+
+    If you measured the old batteries, record that first with battery-reading,
+    and it moves across with them:
+
+    \b
+      tado battery-reading loo 50 50 --note "changed early"
+      tado battery-replaced loo
+
+    Forgot? Add it afterwards with battery-reading --old-set.
+    """
     serial = _resolve_device(device, "Record new batteries in")
     entry = load_battery_history().get(serial, {})
     if entry.get("good_since") == date.today().isoformat() and not entry.get("low_since"):
@@ -425,7 +435,16 @@ def _format_percents(percents: list[int]) -> str:
     "The date defaults to the day they came out.",
 )
 def battery_reading_command(device, percents, on, note, old_set):
-    """Record a battery meter's reading, one PERCENT per cell, for DEVICE (a serial, or a room name, roughly)."""
+    """Record a battery meter's reading, one PERCENT per cell, for DEVICE (a serial, or a room name, roughly).
+
+    The reading belongs to the batteries now in the device. When changing
+    batteries, record the old ones' reading before battery-replaced, and it
+    moves across with them. Already run battery-replaced? Then --old-set puts
+    it on the batteries you took out:
+
+    \b
+      tado battery-reading loo 50 50 --old-set --note "changed early"
+    """
     if on and on.date() > date.today():
         raise click.BadParameter("can't be in the future.", param_hint="--date")
     serial = _resolve_device(device, f"Record {_format_percents(list(percents))} for")

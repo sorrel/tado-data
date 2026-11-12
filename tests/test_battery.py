@@ -698,3 +698,13 @@ def test_completion_offers_nothing_for_a_damaged_history(history_file):
     history_file.write_text("{ not json")
 
     assert _offered("") == []
+
+
+def test_help_explains_how_to_record_the_old_batteries_reading():
+    reading_help = CliRunner().invoke(battery_mod.battery_reading_command, ["--help"]).output
+    replaced_help = CliRunner().invoke(battery_mod.battery_replaced_command, ["--help"]).output
+
+    assert "tado battery-reading loo 50 50 --old-set" in reading_help
+    assert "before battery-replaced" in reading_help
+    assert "tado battery-reading loo 50 50 --note" in replaced_help
+    assert "--old-set" in replaced_help
