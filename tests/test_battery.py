@@ -346,6 +346,53 @@ def test_replaced_command_saves_the_lifespan(frozen_today, history_file):
     assert json.loads(history_file.read_text())["devices"]["VA1"]["past_batteries"][0]["days"] == 111
 
 
+def test_replaced_command_keeps_a_never_low_battery_as_a_minimum(frozen_today, history_file):
+    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}}))
+
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"])
+
+    assert result.exit_code == 0
+    assert "never gave a low warning" in result.output
+    assert "116" in result.output
+    saved = json.loads(history_file.read_text())["devices"]["VA1"]["past_batteries"][0]
+    assert saved["went_low"] is None and saved["minimum"] is True
+
+
+def test_replaced_command_twice_in_a_day_changes_nothing(frozen_today, history_file):
+    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}}))
+    runner = CliRunner()
+    runner.invoke(battery_mod.battery_replaced_command, ["va1"])
+
+    result = runner.invoke(battery_mod.battery_replaced_command, ["va1"])
+
+    assert "already marked as replaced today" in result.output
+    assert len(json.loads(history_file.read_text())["devices"]["VA1"]["past_batteries"]) == 1
+
+
+def test_on_low_is_none_for_a_battery_that_never_went_low():
+    battery = {"went_low": None, "replaced": "2026-11-12"}
+
+    assert battery_mod._on_low(battery) is None
+
+
+def test_history_shows_a_never_low_battery(frozen_today, history_file, monkeypatch):
+    history_file.write_text(json.dumps({"devices": {"VA1": {
+        "good_since": "2026-08-25",
+        "low_since": None,
+        "past_batteries": [
+            {"fitted": "2026-05-01", "went_low": None, "replaced": "2026-08-25", "days": 116, "minimum": True},
+        ],
+    }}}))
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    assert result.exit_code == 0, result.output
+    assert "never" in result.output
+    assert "≥116d" in result.output
+    assert "Average on low" not in result.output
+
+
 def test_damaged_history_stops_the_report_with_a_clear_message(frozen_today, history_file, monkeypatch):
     history_file.write_text("{ not json at all")
     monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)

@@ -69,10 +69,15 @@ def load_battery_history() -> dict:
     return {serial: _migrate_entry(entry) for serial, entry in raw.items()}
 
 
-def _retired_battery(fitted: str, went_low: str, replaced: str, died: str | None) -> dict | None:
-    """Build the permanent record of a replaced battery, or None if its dates are unusable."""
+def _retired_battery(fitted: str, went_low: str | None, replaced: str, died: str | None) -> dict | None:
+    """
+    Build the permanent record of a replaced battery, or None if its dates are unusable.
+
+    A battery taken out before it ever warned has no time to first low; how
+    long it was in is kept instead, as a minimum, with went_low None.
+    """
     try:
-        days = (date.fromisoformat(went_low) - date.fromisoformat(fitted)).days
+        days = (date.fromisoformat(went_low or replaced) - date.fromisoformat(fitted)).days
     except ValueError:
         return None
     record = {
@@ -80,7 +85,7 @@ def _retired_battery(fitted: str, went_low: str, replaced: str, died: str | None
         "went_low": went_low,
         "replaced": replaced,
         "days": days,
-        "minimum": fitted <= TRACKING_STARTED,
+        "minimum": went_low is None or fitted <= TRACKING_STARTED,
     }
     if died:
         record["died"] = died
@@ -91,8 +96,8 @@ def mark_battery_replaced(serial: str) -> dict | None:
     """
     Record that the user has replaced a device's batteries, and restart its clock.
 
-    Returns the saved record of the old battery, or None if it never went
-    LOW or its dates are unusable, so there is no lifespan to keep.
+    Returns the saved record of the old battery, or None if its dates are
+    unusable. A battery that never went LOW is kept as a minimum lifespan.
     Raises KeyError if the device has no history.
     """
     history = load_battery_history()
@@ -101,8 +106,9 @@ def mark_battery_replaced(serial: str) -> dict | None:
     past = list(entry.get("past_batteries", []))
 
     retired = None
-    if entry.get("good_since") and entry.get("low_since"):
-        retired = _retired_battery(entry["good_since"], entry["low_since"], today, entry.get("died"))
+    # A set fitted today that never warned is a repeat of today's replacement, not a battery.
+    if entry.get("good_since") and (entry.get("low_since") or entry["good_since"] != today):
+        retired = _retired_battery(entry["good_since"], entry.get("low_since"), today, entry.get("died"))
     if retired:
         for key in ("low_periods", "meter_readings"):
             if entry.get(key):
