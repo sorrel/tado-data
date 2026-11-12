@@ -11,8 +11,8 @@ import stat
 import pytest
 import requests
 
-import core.auth as auth
 import core.client as client_mod
+from core import auth
 from core.client import TadoClient
 
 

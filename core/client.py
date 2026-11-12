@@ -5,6 +5,7 @@ Handles authenticated requests to the Tado REST API v2.
 """
 
 from datetime import date
+from typing import Any
 
 import click
 import requests
@@ -85,11 +86,12 @@ class TadoClient:
 
         return True
 
-    def _request(self, method: str, path: str, strict: bool = False) -> dict | list | None:
+    def _request(self, method: str, path: str, strict: bool = False) -> Any:
         """
         Make an authenticated API request.
 
-        Returns parsed JSON response, or None on failure. With strict=True a
+        Returns the parsed JSON (Any: its shape depends on the endpoint, and each
+        get_ method below states it), or None on failure. With strict=True a
         failure raises TadoAPIError (RateLimited for HTTP 429) instead, so an
         unattended caller can say exactly what went wrong.
         """
@@ -123,11 +125,11 @@ class TadoClient:
 
         return resp.json()
 
-    def get_devices(self) -> list | None:
+    def get_devices(self) -> list[dict] | None:
         """Fetch all devices in the home."""
         return self._request("GET", f"/homes/{self.home_id}/devices")
 
-    def get_zones(self, strict: bool = False) -> list | None:
+    def get_zones(self, strict: bool = False) -> list[dict] | None:
         """Get all zones/rooms with their devices. Raises TadoAPIError if strict."""
         return self._request("GET", f"/homes/{self.home_id}/zones", strict=strict)
 

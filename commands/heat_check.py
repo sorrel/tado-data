@@ -14,7 +14,7 @@ import click
 from core.auth import AuthError, AuthNetworkError, LoginNeeded, TokenLockBusy
 from core.client import RateLimited, TadoAPIError, TadoClient
 from core.heat_alerts import update_faults
-from core.heat_detect import LONDON, Finding, find_problems
+from core.heat_detect import LONDON, Finding, Offline, Warming, find_problems
 from core.heat_store import load_day_report, load_state, save_day_report, save_state
 from core.notify import NotifyError, notify
 from core.storage import BatteryHistoryError
@@ -63,12 +63,14 @@ def _local(when: datetime) -> str:
 
 
 def format_finding(finding: Finding) -> str:
-    if finding.kind == "warming":
-        return (
-            f"warmed {finding.rise:.1f}° ({finding.low:.1f}° → {finding.high:.1f}°) "
-            f"between {_local(finding.start)} and {_local(finding.end)} with no call for heat"
-        )
-    return f"offline from {_local(finding.start)}"
+    match finding:
+        case Warming(start, end, rise, low, high):
+            return (
+                f"warmed {rise:.1f}° ({low:.1f}° → {high:.1f}°) "
+                f"between {_local(start)} and {_local(end)} with no call for heat"
+            )
+        case Offline(start):
+            return f"offline from {_local(start)}"
 
 
 def _names(zones: list[dict]) -> dict[int, str]:
@@ -130,8 +132,8 @@ def _scheduled_check(today: date, lines: list[str]) -> None:
     client = TadoClient()
     if not client.connect(interactive=False):
         raise HomeNotFound("no home ID")
-    zones = client.get_zones(strict=True)
-    names = _names(zones or [])
+    zones = client.get_zones(strict=True) or []  # strict: a failure raises rather than None
+    names = _names(zones)
     if not names:
         raise NoHeatingZones("no heating zones")
 

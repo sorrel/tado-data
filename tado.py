@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Tado Data CLI
 Report on Tado smart heating system status.
@@ -20,7 +19,6 @@ from commands.zones import zones_command
 @click.group(cls=ColouredGroup)
 def cli():
     """Tado Data — reporting tool for Tado smart heating."""
-    pass
 
 
 # Setup & auth

@@ -11,7 +11,8 @@ Pure logic: takes the parsed report, returns findings. Two kinds:
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
+from typing import ClassVar
 from zoneinfo import ZoneInfo
 
 LONDON = ZoneInfo("Europe/London")
@@ -27,26 +28,39 @@ MIN_OFFLINE = timedelta(hours=1)
 
 
 @dataclass(frozen=True)
-class Finding:
-    kind: str  # "warming" | "offline"
-    start: datetime  # warming: time of the low point; offline: first moment offline in the day
-    end: datetime | None  # warming: time of the high point; offline: None
-    rise: float | None = None
-    low: float | None = None
-    high: float | None = None
+class Warming:
+    """The room rose RISE degrees, from LOW at START to HIGH at END, with no call for heat."""
+
+    start: datetime
+    end: datetime
+    rise: float
+    low: float
+    high: float
+    kind: ClassVar[str] = "warming"
+
+
+@dataclass(frozen=True)
+class Offline:
+    """The zone's measuring device was out of contact; START is the first moment that day."""
+
+    start: datetime
+    kind: ClassVar[str] = "offline"
+
+
+type Finding = Warming | Offline
 
 
 def day_window(day: date) -> tuple[datetime, datetime]:
     """Local midnight to the next local midnight, so 23 or 25 hours when the clocks change."""
     # In UTC: arithmetic between two times in the same zone is wall-clock
     # arithmetic in Python, which would make every day 24 hours long
-    start = datetime.combine(day, time(), tzinfo=LONDON).astimezone(timezone.utc)
-    end = datetime.combine(day + timedelta(days=1), time(), tzinfo=LONDON).astimezone(timezone.utc)
+    start = datetime.combine(day, time(), tzinfo=LONDON).astimezone(UTC)
+    end = datetime.combine(day + timedelta(days=1), time(), tzinfo=LONDON).astimezone(UTC)
     return start, end
 
 
 def _when(stamp: str) -> datetime:
-    return datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    return datetime.fromisoformat(stamp)  # reads Tado's trailing "Z" as UTC
 
 
 def _series(report: dict, *path: str) -> dict:
@@ -94,7 +108,7 @@ def _warming(report: dict, day_start: datetime, day_end: datetime) -> list[Findi
                 best = (rise, lowest, (when, celsius))
         if best and best[0] >= RISE_THRESHOLD:
             rise, (low_at, low), (high_at, high) = best
-            found.append(Finding("warming", low_at, high_at, round(rise, 2), low, high))
+            found.append(Warming(low_at, high_at, round(rise, 2), low, high))
     return sorted(found, key=lambda f: f.start)
 
 
@@ -112,7 +126,7 @@ def _offline(report: dict, day_start: datetime, day_end: datetime) -> list[Findi
         total += end - start
         first = start if first is None else min(first, start)
     if first is not None and total >= MIN_OFFLINE:
-        return [Finding("offline", first, None)]
+        return [Offline(first)]
     return []
 
 

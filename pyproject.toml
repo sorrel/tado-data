@@ -28,6 +28,13 @@ pythonpath = ["."]
 line-length = 100
 extend-exclude = ["docs"]  # the plans quote code as it was; leave them alone
 
+# `uvx pyright` type-checks the application code against the project's venv.
+# Tests are left out: their partial records and fake clients are deliberate.
+[tool.pyright]
+include = ["core", "commands", "tado.py"]
+venvPath = "."
+venv = ".venv"
+
 [tool.hatch.build.targets.wheel]
 packages = ["core", "commands"]
 
