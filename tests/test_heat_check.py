@@ -7,8 +7,9 @@ reaches Tado and no notification is shown.
 
 import json
 import subprocess
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 from click.testing import CliRunner
@@ -17,7 +18,7 @@ import commands.heat_check as hc
 import core.notify as notify_mod
 from core.auth import LoginNeeded
 from core.client import RateLimited
-from core.heat_detect import Finding
+from core.heat_detect import Offline, Warming
 from core.heat_store import load_day_report, load_state, save_state
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "dayreport_fault.json").read_text())
@@ -56,7 +57,7 @@ class FakeHeatClient:
     reports = staticmethod(fault_day_only)
     connect_error = None
     fail_on_day = None
-    instances = []
+    instances: ClassVar[list] = []
 
     def __init__(self):
         self.home_id = 42
@@ -144,16 +145,15 @@ def test_days_to_check_nothing_when_up_to_date():
 
 
 def test_format_finding_matches_the_spec():
-    utc = timezone.utc
-    warming = Finding(
-        "warming",
+    utc = UTC
+    warming = Warming(
         datetime(2026, 11, 10, 10, tzinfo=utc),
         datetime(2026, 11, 10, 18, tzinfo=utc),
         6.62,
         18.56,
         25.18,
     )
-    offline = Finding("offline", datetime(2026, 11, 10, 19, 35, 55, tzinfo=utc), None)
+    offline = Offline(datetime(2026, 11, 10, 19, 35, 55, tzinfo=utc))
     assert (
         hc.format_finding(warming)
         == "warmed 6.6° (18.6° → 25.2°) between 10:00 and 18:00 with no call for heat"
@@ -162,7 +162,7 @@ def test_format_finding_matches_the_spec():
 
 
 def test_format_finding_shows_summer_time():
-    finding = Finding("offline", datetime(2026, 7, 1, 18, 35, tzinfo=timezone.utc), None)
+    finding = Offline(datetime(2026, 7, 1, 18, 35, tzinfo=UTC))
     assert hc.format_finding(finding) == "offline from 19:35"
 
 
@@ -271,8 +271,10 @@ def test_scheduled_rate_limited_keeps_saved_days(monkeypatch, fake, sent):
     assert sent == [
         (
             "Tado heat check",
-            "Tado's daily request limit was reached; the check will carry on tomorrow.; "
-            "Downstairs Loo is offline",
+            (
+                "Tado's daily request limit was reached; the check will carry on tomorrow.; "
+                "Downstairs Loo is offline"
+            ),
         )
     ]
 

@@ -7,7 +7,7 @@ Everything else is a small hand-made report.
 """
 
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -23,7 +23,7 @@ def load_fixture():
 
 
 def utc(*parts):
-    return datetime(*parts, tzinfo=timezone.utc)
+    return datetime(*parts, tzinfo=UTC)
 
 
 def at(hhmm, day="2026-11-10"):

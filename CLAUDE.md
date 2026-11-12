@@ -161,10 +161,13 @@ a checked day costs about 19.
 - Files up to 950 lines; functions short enough to read at a glance (about 40
   lines). Split a long function into named steps rather than adding comments
   to navigate it.
+- `uvx ruff check .` and `uvx pyright` must both be clean. Pyright checks the
+  application code only (`[tool.pyright]` in `pyproject.toml`), not the tests.
 - The shape of `battery_history.json` is set out as `TypedDict`s at the top of
   `core/storage.py` (`DeviceHistory`, `PastBattery`, `MeterReading`, …). Keep
-  them in step with any change to what is saved. They are checked with
-  `uvx pyright --pythonpath .venv/bin/python core/storage.py commands/battery.py`.
+  them in step with any change to what is saved.
+- A heat-check finding is a `Warming` or an `Offline` (`core/heat_detect.py`),
+  each with only the fields it has; `format_finding` matches on the type.
 
 ## Testing
 
