@@ -243,13 +243,31 @@ def test_marking_replaced_restarts_the_clock(frozen_today, history_file):
     assert entry["low_since"] is None
 
 
-def test_replacing_a_battery_that_never_went_low_saves_no_lifespan(frozen_today, history_file):
+def test_replacing_a_battery_that_never_went_low_keeps_its_time_in_as_a_minimum(frozen_today, history_file):
+    # Changed while still NORMAL (VA1859608064, November 2026): how long it
+    # would have lasted to a low warning is unknown, but it is at least this.
     _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
 
-    assert mark_battery_replaced(SERIAL) is None
+    retired = mark_battery_replaced(SERIAL)
 
+    assert retired == {
+        "fitted": "2026-05-01",
+        "went_low": None,
+        "replaced": "2026-08-25",
+        "days": 116,
+        "minimum": True,
+    }
     entry = load_battery_history()[SERIAL]
-    assert entry == {"good_since": "2026-08-25", "low_since": None}
+    assert entry == {"good_since": "2026-08-25", "low_since": None, "past_batteries": [retired]}
+
+
+def test_replacing_a_never_low_battery_keeps_its_meter_readings(frozen_today, history_file):
+    reading = {"date": "2026-08-24", "percent": [50, 50]}
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None, "meter_readings": [reading]}})
+
+    retired = mark_battery_replaced(SERIAL)
+
+    assert retired["meter_readings"] == [reading]
 
 
 def test_marking_an_unknown_device_is_refused(frozen_today, history_file):

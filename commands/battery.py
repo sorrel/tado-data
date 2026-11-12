@@ -68,8 +68,10 @@ def _average_days(lifespans: list[dict]) -> int | None:
     return round(sum(measured) / len(measured))
 
 
-def _on_low(battery: dict) -> dict:
+def _on_low(battery: dict) -> dict | None:
     """How long a battery kept going once low; a minimum if it was replaced before dying."""
+    if not battery.get("went_low"):
+        return None  # taken out before it ever warned
     died = battery.get("died")
     end = date.fromisoformat(died or battery["replaced"])
     return {"days": (end - date.fromisoformat(battery["went_low"])).days, "minimum": not died}
@@ -385,16 +387,25 @@ def battery_command(room):
 def battery_replaced_command(device):
     """Record that you have replaced the batteries in DEVICE (a serial, or a room name, roughly)."""
     serial = _resolve_device(device, "Record new batteries in")
+    entry = load_battery_history().get(serial, {})
+    if entry.get("good_since") == date.today().isoformat() and not entry.get("low_since"):
+        click.echo(f"{serial} was already marked as replaced today; nothing changed.")
+        return
     try:
         retired = mark_battery_replaced(serial)
     except KeyError:
         raise click.ClickException(f"No battery history for {serial}.")
 
-    if retired:
+    if retired and retired["went_low"] is None:
+        click.echo(
+            f"{serial} marked as replaced. The old set never gave a low warning; it was in for "
+            f"{retired['days']} days, saved as a minimum lifespan."
+        )
+    elif retired:
         prefix = "at least " if retired["minimum"] else ""
         click.echo(f"{serial} marked as replaced. The old set reached its low warning after {prefix}{retired['days']} days.")
     else:
-        click.echo(f"{serial} marked as replaced. The old set had no recorded low warning, so no lifespan was saved.")
+        click.echo(f"{serial} marked as replaced. The old set's dates were unusable, so no lifespan was saved.")
 
 
 def _format_percents(percents: list[int]) -> str:
@@ -468,10 +479,10 @@ def _print_lifespans(lifespans: list[tuple[str, dict]], device_zones: dict) -> N
             f"  {zone:<{zone_width}}  "
             f"{serial:<{serial_width}}  "
             f"{battery['fitted']:<10}  "
-            f"{battery['went_low']:<10}  "
+            f"{battery['went_low'] or 'never':<10}  "
             f"{battery['replaced']:<10}  "
             f"{_format_last([battery])}  "
-            f"{_format_last([_on_low(battery)])}"
+            f"{_format_last([on_low]) if (on_low := _on_low(battery)) else f'{chr(8212):>6}'}"
         )
 
     # Average of the sets whose real lifespan we know
@@ -490,7 +501,7 @@ def _print_lifespans(lifespans: list[tuple[str, dict]], device_zones: dict) -> N
         click.echo(summary)
 
     # Only batteries that actually died tell us how long a low one keeps going
-    on_low = [_on_low(battery) for battery in all_batteries]
+    on_low = [low for battery in all_batteries if (low := _on_low(battery))]
     low_average = _average_days(on_low)
     if low_average is not None:
         died = sum(1 for battery in on_low if not battery["minimum"])
