@@ -22,8 +22,8 @@ uv run python tado.py <command>
 uv run python tado.py auth        # Authenticate (opens browser)
 uv run python tado.py battery     # Battery status report
 uv run python tado.py battery-history  # Every replaced battery and the average lifespan
-uv run python tado.py battery-replaced SERIAL  # Record that you replaced a device's batteries
-uv run python tado.py battery-reading SERIAL 30 40 [--date YYYY-MM-DD] [--note TEXT]  # Record a battery meter reading, one % per cell
+uv run python tado.py battery-replaced DEVICE  # Record that you replaced a device's batteries (serial or rough room name)
+uv run python tado.py battery-reading DEVICE 30 40 [--date YYYY-MM-DD] [--note TEXT]  # Record a battery meter reading, one % per cell
 uv run python tado.py status      # Home info and device counts
 uv run python tado.py heat-check [--date YYYY-MM-DD]  # Rooms that warmed with no call for heat, and offline valves (default: yesterday)
 ```
@@ -59,7 +59,8 @@ OAuth2 Device Code Grant flow (required by Tado since March 2025):
 - Simple string field: `"NORMAL"` or `"LOW"` (no percentage available)
 - Present on battery-powered devices only (thermostats, radiator valves)
 - Absent on mains-powered devices (gateway, boiler unit)
-- `battery-replaced SERIAL` is the only thing that marks a battery as replaced. Its lifespan (fitting to first low warning) is then kept permanently in that device's `past_batteries` in `stored_data/battery_history.json`
+- `battery-replaced` and `battery-reading` take a serial or a rough room name (`loo`, `kitchn`). A serial makes no request to Tado; a room name fetches the zone list. Matching ignores case, spaces and punctuation and tries exact, then contains, then close spelling; a close-spelling match asks for confirmation. A room with two battery devices, or a name matching two rooms, stops and asks for the serial. The mains-wired hall thermostat is never chosen
+- `battery-replaced` is the only thing that marks a battery as replaced. Its lifespan (fitting to first low warning) is then kept permanently in that device's `past_batteries` in `stored_data/battery_history.json`
 - Tracking began on 2026-04-17, so batteries dated then are of unknown age: their lifespans are saved with `minimum: true` and shown as, for example, `≥206d`
 - `stored_data/` is local only and cannot be rebuilt from Tado, so saves are atomic and each one keeps the previous version as `battery_history.json.bak`. A damaged file stops the command with an error; it must never be treated as empty, or the next save would overwrite the real history
 - `battery-reading` keeps what a battery meter said, one percentage per cell, in `meter_readings` (`date`, `percent`, optional `note`). Like `low_periods`, it belongs to the batteries now fitted: every save must carry it across, and `battery-replaced` moves it into that battery's record in `past_batteries`. `battery-history` lists every reading

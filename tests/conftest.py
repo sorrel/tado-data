@@ -36,6 +36,19 @@ def frozen_today(monkeypatch):
     return TODAY
 
 
+@pytest.fixture(autouse=True)
+def room_names_file(tmp_path, monkeypatch):
+    """Redirect the saved room names for every test.
+
+    Any test that builds a zone map would otherwise write stored_data/room_names.json.
+    """
+    import core.storage as storage_mod
+
+    path = tmp_path / "room_names.json"
+    monkeypatch.setattr(storage_mod, "ROOM_NAMES_FILE", str(path))
+    return path
+
+
 @pytest.fixture
 def history_file(tmp_path, monkeypatch):
     """Redirect battery history storage into a temp file.

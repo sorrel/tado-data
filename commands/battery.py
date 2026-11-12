@@ -2,12 +2,22 @@
 Battery reporting command.
 """
 
+import difflib
+import re
 from datetime import date
 
 import click
+from click.shell_completion import CompletionItem
 
 from core.client import TadoClient
-from core.storage import add_meter_reading, load_battery_history, mark_battery_replaced, update_battery_history
+from core.storage import (
+    add_meter_reading,
+    load_battery_history,
+    load_room_names,
+    mark_battery_replaced,
+    save_room_names,
+    update_battery_history,
+)
 
 # Colour bands for battery age, one per 100 days. Bright colours for a black background.
 AGE_BANDS = ["bright_green", "bright_cyan", "bright_yellow", "bright_magenta", "bright_red"]
@@ -78,7 +88,129 @@ def _get_device_zone_map(client: TadoClient) -> dict:
             serial = device.get("serialNo")
             if serial:
                 device_zones[serial] = zone_name
+    save_room_names(device_zones)
     return device_zones
+
+
+# A Tado serial: two letters then digits, such as VA0149052928. Anything else is a room name.
+SERIAL_PATTERN = re.compile(r"^[A-Za-z]{2}\d+$")
+
+
+def _squash(text: str) -> str:
+    """Lower-case and drop spaces and punctuation, so "downstairs-loo" finds "Downstairs Loo"."""
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def _match_rooms(query: str, rooms: list[str]) -> tuple[list[str], bool]:
+    """
+    Find the rooms a rough name could mean.
+
+    Tries an exact match, then rooms containing the query, then close spellings.
+    Returns the rooms found and whether the match was only a close spelling,
+    which is worth confirming.
+    """
+    wanted = _squash(query)
+    if not wanted:
+        return [], False
+    squashed = {room: _squash(room) for room in rooms}
+
+    exact = [room for room, name in squashed.items() if name == wanted]
+    if exact:
+        return exact, False
+    containing = [room for room, name in squashed.items() if wanted in name]
+    if containing:
+        return containing, False
+
+    # Close spellings, of the whole name or of any one word in it ("bathrm", "kitchn").
+    def score(room: str) -> float:
+        candidates = [squashed[room], *(_squash(word) for word in room.split())]
+        return max(difflib.SequenceMatcher(None, wanted, c).ratio() for c in candidates)
+
+    scores = {room: score(room) for room in rooms}
+    best = max(scores.values(), default=0)
+    if best < 0.75:
+        return [], True
+    return [room for room, s in scores.items() if s == best], True
+
+
+def _complete_device(ctx, param, incomplete: str) -> list[CompletionItem]:
+    """
+    Offer room names and serials for tab completion, from local files only.
+
+    Pressing Tab must never contact Tado, so rooms come from the names saved
+    the last time a battery command fetched them.
+    """
+    try:
+        history = load_battery_history()
+    except click.ClickException:
+        return []
+    serials = sorted(s for s in history if s not in MAINS_WIRED_SERIALS)
+    room_names = load_room_names()
+    wanted = _squash(incomplete)
+
+    rooms: dict[str, list[str]] = {}
+    for serial in serials:
+        if serial in room_names:
+            rooms.setdefault(room_names[serial], []).append(serial)
+
+    items = [
+        CompletionItem(room, help=", ".join(found))
+        for room, found in sorted(rooms.items())
+        if wanted in _squash(room)
+    ]
+    items += [
+        CompletionItem(serial, help=room_names.get(serial, ""))
+        for serial in serials
+        if serial.lower().startswith(incomplete.lower())
+    ]
+    return items
+
+
+def _resolve_device(name: str, action: str) -> str:
+    """
+    Turn a serial or a rough room name into the serial of a device with battery history.
+
+    A serial is used as it is, with no request to Tado. A room name needs the
+    zone list from Tado to find which devices are in it.
+    """
+    if SERIAL_PATTERN.match(name):
+        return name.upper()
+
+    history = load_battery_history()
+    client = TadoClient()
+    if not client.connect():
+        raise click.ClickException("Couldn't reach Tado to look up room names. Use the device's serial instead.")
+    device_zones = _get_device_zone_map(client)
+
+    rooms: dict[str, list[str]] = {}
+    for serial, zone in device_zones.items():
+        if serial in history and serial not in MAINS_WIRED_SERIALS:
+            rooms.setdefault(zone, []).append(serial)
+
+    found, close_only = _match_rooms(name, sorted(rooms))
+    if not found:
+        raise click.ClickException(
+            f"No room matches \"{name}\". Rooms with battery devices: {', '.join(sorted(rooms))}."
+        )
+    if len(found) > 1:
+        raise click.ClickException(f"\"{name}\" could be {', '.join(found)}. Be more specific.")
+
+    room = found[0]
+    serials = sorted(rooms[room])
+    if len(serials) > 1:
+        def label(serial: str) -> str:
+            periods = history[serial].get("low_periods", [])
+            return f"{serial} (low)" if periods and periods[-1].get("to") is None else serial
+        raise click.ClickException(
+            f"{room} has {len(serials)} battery devices: {', '.join(label(s) for s in serials)}. Give the serial instead."
+        )
+
+    serial = serials[0]
+    if close_only:
+        click.confirm(f"{action} {room} ({serial})?", default=True, abort=True)
+    else:
+        click.echo(f"{room}: {serial}")
+    return serial
 
 
 @click.command("battery")
@@ -249,10 +381,10 @@ def battery_command(room):
 
 
 @click.command("battery-replaced")
-@click.argument("serial")
-def battery_replaced_command(serial):
-    """Record that you have replaced the batteries in device SERIAL."""
-    serial = serial.upper()
+@click.argument("device", shell_complete=_complete_device)
+def battery_replaced_command(device):
+    """Record that you have replaced the batteries in DEVICE (a serial, or a room name, roughly)."""
+    serial = _resolve_device(device, "Record new batteries in")
     try:
         retired = mark_battery_replaced(serial)
     except KeyError:
@@ -270,15 +402,15 @@ def _format_percents(percents: list[int]) -> str:
 
 
 @click.command("battery-reading")
-@click.argument("serial")
+@click.argument("device", shell_complete=_complete_device)
 @click.argument("percents", nargs=-1, required=True, type=click.IntRange(0, 100))
 @click.option("--date", "on", type=click.DateTime(formats=["%Y-%m-%d"]), help="Day of the reading (YYYY-MM-DD). Defaults to today.")
 @click.option("--note", help="Anything worth keeping, such as whether the batteries went back in.")
-def battery_reading_command(serial, percents, on, note):
-    """Record a battery meter's reading, one PERCENT per cell, for device SERIAL."""
-    serial = serial.upper()
+def battery_reading_command(device, percents, on, note):
+    """Record a battery meter's reading, one PERCENT per cell, for DEVICE (a serial, or a room name, roughly)."""
     if on and on.date() > date.today():
         raise click.BadParameter("can't be in the future.", param_hint="--date")
+    serial = _resolve_device(device, f"Record {_format_percents(list(percents))} for")
     try:
         reading = add_meter_reading(serial, list(percents), on=on.date().isoformat() if on else None, note=note)
     except KeyError:
