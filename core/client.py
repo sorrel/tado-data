@@ -60,9 +60,11 @@ class TadoClient:
             click.echo(f"Couldn't log in to Tado: {error}.", err=True)
             return False
 
-        self.session.headers.update({
-            "Authorization": f"Bearer {token}",
-        })
+        self.session.headers.update(
+            {
+                "Authorization": f"Bearer {token}",
+            }
+        )
 
         # Fetch home ID
         me = self._request("GET", "/me", strict=not interactive)
@@ -100,7 +102,9 @@ class TadoClient:
             click.echo(f"Request failed: {e}", err=True)
             return None
 
-        limits = [f"{name}={value}" for name, value in resp.headers.items() if "ratelimit" in name.lower()]
+        limits = [
+            f"{name}={value}" for name, value in resp.headers.items() if "ratelimit" in name.lower()
+        ]
         self.rate_limit = "; ".join(limits) or None
 
         if resp.status_code != 200 and strict:
@@ -108,7 +112,9 @@ class TadoClient:
             raise error(f"Tado returned {resp.status_code}", status=resp.status_code)
 
         if resp.status_code == 401:
-            click.echo("Authentication expired. Please run 'tado auth' to re-authenticate.", err=True)
+            click.echo(
+                "Authentication expired. Please run 'tado auth' to re-authenticate.", err=True
+            )
             return None
 
         if resp.status_code != 200:
@@ -136,7 +142,9 @@ class TadoClient:
     def get_day_report(self, zone_id: int, day: date) -> dict:
         """A zone's measurements for one day, about every 15 minutes. Raises TadoAPIError."""
         return self._request(
-            "GET", f"/homes/{self.home_id}/zones/{zone_id}/dayReport?date={day.isoformat()}", strict=True
+            "GET",
+            f"/homes/{self.home_id}/zones/{zone_id}/dayReport?date={day.isoformat()}",
+            strict=True,
         )
 
     def get_home(self) -> dict | None:

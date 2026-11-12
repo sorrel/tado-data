@@ -47,7 +47,9 @@ def make_report(points=(), calls=(("00:00", "next", "NONE"),), connected=None):
                 "dataPoints": [{"timestamp": at(t), "value": {"celsius": c}} for t, c in points],
             },
         },
-        "callForHeat": {"dataIntervals": [{"from": at(a), "to": end(b), "value": v} for a, b, v in calls]},
+        "callForHeat": {
+            "dataIntervals": [{"from": at(a), "to": end(b), "value": v} for a, b, v in calls]
+        },
     }
     if connected is not None:
         report["measuredData"]["measuringDeviceConnected"] = {
@@ -140,15 +142,22 @@ def test_points_outside_the_day_are_ignored():
 
 
 def test_short_offline_drop_is_ignored():
-    report = make_report(connected=[("00:00", "10:00", True), ("10:00", "10:59", False), ("10:59", "next", True)])
+    report = make_report(
+        connected=[("00:00", "10:00", True), ("10:00", "10:59", False), ("10:59", "next", True)]
+    )
     assert find_problems(report, DAY) == []
 
 
 def test_offline_spells_add_up_to_the_hour():
-    report = make_report(connected=[
-        ("00:00", "09:00", True), ("09:00", "09:40", False), ("09:40", "12:00", True),
-        ("12:00", "12:30", False), ("12:30", "next", True),
-    ])
+    report = make_report(
+        connected=[
+            ("00:00", "09:00", True),
+            ("09:00", "09:40", False),
+            ("09:40", "12:00", True),
+            ("12:00", "12:30", False),
+            ("12:30", "next", True),
+        ]
+    )
     found = find_problems(report, DAY)
     assert kinds(found) == ["offline"]
     assert found[0].start == utc(2026, 11, 10, 9, 0)
@@ -163,7 +172,9 @@ def test_offline_all_day_without_temperatures():
 
 def test_offline_before_the_day_counts_from_midnight():
     report = make_report(connected=[("00:00", "next", False)])
-    report["measuredData"]["measuringDeviceConnected"]["dataIntervals"][0]["from"] = at("19:35", "2026-11-09")
+    report["measuredData"]["measuringDeviceConnected"]["dataIntervals"][0]["from"] = at(
+        "19:35", "2026-11-09"
+    )
     assert find_problems(report, DAY)[0].start == utc(2026, 11, 10, 0, 0)
 
 
@@ -190,11 +201,20 @@ def test_summer_time_day_window_and_local_times():
 def test_fixture_holds_only_what_detection_needs():
     """The repo is public: away/home stripes, weather and the rest must stay out."""
     report = load_fixture()
-    assert set(report) <= {"zoneType", "interval", "hoursInDay", "measuredData", "callForHeat", "settings"}
+    assert set(report) <= {
+        "zoneType",
+        "interval",
+        "hoursInDay",
+        "measuredData",
+        "callForHeat",
+        "settings",
+    }
     assert set(report["measuredData"]) <= {"insideTemperature", "measuringDeviceConnected"}
 
 
-@pytest.mark.parametrize("measured", [None, {"insideTemperature": None}, {"insideTemperature": {"dataPoints": None}}])
+@pytest.mark.parametrize(
+    "measured", [None, {"insideTemperature": None}, {"insideTemperature": {"dataPoints": None}}]
+)
 def test_null_series_do_not_crash(measured):
     report = make_report(connected=[("00:00", "next", False)])
     connected = report["measuredData"]["measuringDeviceConnected"]
@@ -207,6 +227,8 @@ def test_null_series_do_not_crash(measured):
 
 def test_null_values_in_points_and_intervals_are_skipped():
     report = make_report([("08:00", 18.0), ("12:00", 25.0)])
-    report["measuredData"]["insideTemperature"]["dataPoints"].append({"timestamp": at("13:00"), "value": None})
+    report["measuredData"]["insideTemperature"]["dataPoints"].append(
+        {"timestamp": at("13:00"), "value": None}
+    )
     report["callForHeat"] = None
     assert find_problems(report, DAY) == []

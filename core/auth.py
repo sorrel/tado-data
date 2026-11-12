@@ -112,10 +112,14 @@ def device_code_flow() -> dict | None:
     # Step 1: Request device code
     click.echo("Requesting device authorisation...")
     try:
-        resp = requests.post(DEVICE_AUTH_URL, data={
-            "client_id": CLIENT_ID,
-            "scope": "offline_access",
-        }, timeout=10)
+        resp = requests.post(
+            DEVICE_AUTH_URL,
+            data={
+                "client_id": CLIENT_ID,
+                "scope": "offline_access",
+            },
+            timeout=10,
+        )
     except requests.RequestException as e:
         click.echo(f"Network error starting device auth: {e}", err=True)
         return None
@@ -144,11 +148,15 @@ def device_code_flow() -> dict | None:
         time.sleep(interval)
 
         try:
-            resp = requests.post(TOKEN_URL, data={
-                "client_id": CLIENT_ID,
-                "device_code": device_code,
-                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
-            }, timeout=10)
+            resp = requests.post(
+                TOKEN_URL,
+                data={
+                    "client_id": CLIENT_ID,
+                    "device_code": device_code,
+                    "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                },
+                timeout=10,
+            )
         except requests.RequestException:
             continue
 
@@ -183,11 +191,15 @@ def refresh_access_token(refresh_token: str) -> dict | None:
     if Tado can't be reached or fails, since the login may still be good.
     """
     try:
-        resp = requests.post(TOKEN_URL, data={
-            "client_id": CLIENT_ID,
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-        }, timeout=10)
+        resp = requests.post(
+            TOKEN_URL,
+            data={
+                "client_id": CLIENT_ID,
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            },
+            timeout=10,
+        )
     except requests.RequestException as error:
         raise AuthNetworkError(f"couldn't reach Tado's login server ({error})") from error
 

@@ -22,6 +22,12 @@ dev = [
 testpaths = ["tests"]
 pythonpath = ["."]
 
+# No line over 100 characters. `uvx ruff format` wraps code to fit;
+# `uvx ruff check --select E501` finds long strings and comments it can't.
+[tool.ruff]
+line-length = 100
+extend-exclude = ["docs"]  # the plans quote code as it was; leave them alone
+
 [tool.hatch.build.targets.wheel]
 packages = ["core", "commands"]
 

@@ -50,7 +50,10 @@ def _when(stamp: str) -> datetime:
 
 
 def _series(report: dict, *path: str) -> dict:
-    """The series at `path`, or {} if any level is missing or null (as Tado sends for a dead device)."""
+    """
+    The series at `path`, or {} if any level is missing or null (as Tado
+    sends for a dead device).
+    """
     series = report
     for key in path:
         series = series.get(key) if isinstance(series, dict) else None
@@ -98,7 +101,9 @@ def _warming(report: dict, day_start: datetime, day_end: datetime) -> list[Findi
 def _offline(report: dict, day_start: datetime, day_end: datetime) -> list[Finding]:
     total = timedelta()
     first = None
-    for spell_from, spell_to, connected in _intervals(report, "measuredData", "measuringDeviceConnected"):
+    for spell_from, spell_to, connected in _intervals(
+        report, "measuredData", "measuringDeviceConnected"
+    ):
         if connected is not False:
             continue
         start, end = max(spell_from, day_start), min(spell_to, day_end)

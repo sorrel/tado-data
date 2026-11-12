@@ -21,7 +21,9 @@ _CLEARED = {
 }
 
 
-def update_faults(faults: dict, day: date, current: dict[str, tuple[str, str]]) -> tuple[dict, list[str]]:
+def update_faults(
+    faults: dict, day: date, current: dict[str, tuple[str, str]]
+) -> tuple[dict, list[str]]:
     """
     Apply one checked day's faults to the known ones.
 
@@ -35,7 +37,13 @@ def update_faults(faults: dict, day: date, current: dict[str, tuple[str, str]]) 
     for key, (zone, kind) in current.items():
         known = faults.get(key)
         if known is None:
-            updated[key] = {"zone": zone, "kind": kind, "first_seen": today, "last_seen": today, "last_notified": today}
+            updated[key] = {
+                "zone": zone,
+                "kind": kind,
+                "first_seen": today,
+                "last_seen": today,
+                "last_notified": today,
+            }
             lines.append(_FOUND[kind].format(zone=zone))
             continue
         record = {**known, "zone": zone, "last_seen": today}

@@ -13,7 +13,7 @@ LOO_WARMING = {"12:warming": ("Downstairs Loo", "warming")}
 
 
 def _run(days, current):
-    """Check the same faults on each of `days` in turn; return the final faults and every line sent."""
+    """Check the same faults on each of `days` in turn; return the final faults and lines sent."""
     faults, sent = {}, []
     for day in days:
         faults, lines = update_faults(faults, day, current)
@@ -25,8 +25,11 @@ def test_new_fault_notifies():
     faults, lines = update_faults({}, DAY, LOO_OFFLINE)
     assert lines == ["Downstairs Loo is offline"]
     assert faults["12:offline"] == {
-        "zone": "Downstairs Loo", "kind": "offline",
-        "first_seen": "2026-11-10", "last_seen": "2026-11-10", "last_notified": "2026-11-10",
+        "zone": "Downstairs Loo",
+        "kind": "offline",
+        "first_seen": "2026-11-10",
+        "last_seen": "2026-11-10",
+        "last_notified": "2026-11-10",
     }
 
 

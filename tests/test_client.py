@@ -65,13 +65,17 @@ def test_non_strict_request_still_returns_none(capsys):
 
 def test_day_report_path_and_date():
     seen = []
-    report = _client(FakeResponse(200, {"zoneType": "HEATING"}), seen=seen).get_day_report(12, date(2026, 11, 10))
+    report = _client(FakeResponse(200, {"zoneType": "HEATING"}), seen=seen).get_day_report(
+        12, date(2026, 11, 10)
+    )
     assert report == {"zoneType": "HEATING"}
     assert seen[0].endswith("/homes/42/zones/12/dayReport?date=2026-11-10")
 
 
 def test_rate_limit_headers_are_kept():
-    client = _client(FakeResponse(200, {}, headers={"RateLimit-Remaining": "19000", "Content-Type": "x"}))
+    client = _client(
+        FakeResponse(200, {}, headers={"RateLimit-Remaining": "19000", "Content-Type": "x"})
+    )
     client._request("GET", "/x")
     assert client.rate_limit == "RateLimit-Remaining=19000"
 

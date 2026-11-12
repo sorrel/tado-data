@@ -154,6 +154,18 @@ a checked day costs about 19.
 - `tokens.json` — Saved auth tokens (gitignored)
 - `tests/` — pytest suite (pure logic only; never hits the API)
 
+## Code Style
+
+- No line over 100 characters (`[tool.ruff]` in `pyproject.toml`): `uvx ruff format .`
+  wraps code, and `uvx ruff check --select E501 .` finds long strings it can't.
+- Files up to 950 lines; functions short enough to read at a glance (about 40
+  lines). Split a long function into named steps rather than adding comments
+  to navigate it.
+- The shape of `battery_history.json` is set out as `TypedDict`s at the top of
+  `core/storage.py` (`DeviceHistory`, `PastBattery`, `MeterReading`, …). Keep
+  them in step with any change to what is saved. They are checked with
+  `uvx pyright --pythonpath .venv/bin/python core/storage.py commands/battery.py`.
+
 ## Testing
 
 ```bash

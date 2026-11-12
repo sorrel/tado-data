@@ -30,12 +30,14 @@ def zones_command():
         for device in zone.get("devices", []):
             serial = device.get("shortSerialNo", device.get("serialNo", ""))
             device_type = device.get("deviceType", "Unknown")
-            rows.append({
-                "zone": zone_name,
-                "serial": serial,
-                "type": device_type,
-                "fires_boiler": fires_boiler,
-            })
+            rows.append(
+                {
+                    "zone": zone_name,
+                    "serial": serial,
+                    "type": device_type,
+                    "fires_boiler": fires_boiler,
+                }
+            )
 
     if not rows:
         click.echo("No devices found in zones.")

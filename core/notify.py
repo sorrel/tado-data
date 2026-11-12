@@ -10,9 +10,12 @@ where macOS lists it under Script Editor.
 import subprocess
 
 _SCRIPT = [
-    "-e", "on run argv",
-    "-e", "display notification (item 2 of argv) with title (item 1 of argv)",
-    "-e", "end run",
+    "-e",
+    "on run argv",
+    "-e",
+    "display notification (item 2 of argv) with title (item 1 of argv)",
+    "-e",
+    "end run",
 ]
 
 
@@ -22,6 +25,8 @@ class NotifyError(Exception):
 
 def notify(title: str, message: str) -> None:
     try:
-        subprocess.run(["osascript", *_SCRIPT, title, message], check=True, timeout=10, capture_output=True)
+        subprocess.run(
+            ["osascript", *_SCRIPT, title, message], check=True, timeout=10, capture_output=True
+        )
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         raise NotifyError(str(error)) from error

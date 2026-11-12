@@ -18,7 +18,14 @@ def _rendered():
 def test_runs_scheduled_heat_check_through_uv():
     plist = _rendered()
     assert plist["ProgramArguments"] == [
-        "/opt/uv", "run", "--directory", "/repo", "python", "tado.py", "heat-check", "--scheduled",
+        "/opt/uv",
+        "run",
+        "--directory",
+        "/repo",
+        "python",
+        "tado.py",
+        "heat-check",
+        "--scheduled",
     ]
 
 

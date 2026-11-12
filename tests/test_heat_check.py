@@ -31,9 +31,15 @@ ZONES = [
 
 def offline_report(day):
     end = day + timedelta(days=1)
-    return {"measuredData": {"measuringDeviceConnected": {"dataIntervals": [
-        {"from": f"{day}T00:00:00Z", "to": f"{end}T00:00:00Z", "value": False},
-    ]}}}
+    return {
+        "measuredData": {
+            "measuringDeviceConnected": {
+                "dataIntervals": [
+                    {"from": f"{day}T00:00:00Z", "to": f"{end}T00:00:00Z", "value": False},
+                ]
+            }
+        }
+    }
 
 
 def fault_day_only(zone_id, day):
@@ -139,9 +145,19 @@ def test_days_to_check_nothing_when_up_to_date():
 
 def test_format_finding_matches_the_spec():
     utc = timezone.utc
-    warming = Finding("warming", datetime(2026, 11, 10, 10, tzinfo=utc), datetime(2026, 11, 10, 18, tzinfo=utc), 6.62, 18.56, 25.18)
+    warming = Finding(
+        "warming",
+        datetime(2026, 11, 10, 10, tzinfo=utc),
+        datetime(2026, 11, 10, 18, tzinfo=utc),
+        6.62,
+        18.56,
+        25.18,
+    )
     offline = Finding("offline", datetime(2026, 11, 10, 19, 35, 55, tzinfo=utc), None)
-    assert hc.format_finding(warming) == "warmed 6.6° (18.6° → 25.2°) between 10:00 and 18:00 with no call for heat"
+    assert (
+        hc.format_finding(warming)
+        == "warmed 6.6° (18.6° → 25.2°) between 10:00 and 18:00 with no call for heat"
+    )
     assert hc.format_finding(offline) == "offline from 19:35"
 
 
@@ -158,7 +174,9 @@ def test_manual_run_prints_findings_and_never_notifies(monkeypatch, fake, sent):
     result = run()
     assert result.exit_code == 0, result.output
     assert "Downstairs Loo" in result.output
-    assert "warmed 6.6° (18.6° → 25.2°) between 10:00 and 18:00 with no call for heat" in result.output
+    assert (
+        "warmed 6.6° (18.6° → 25.2°) between 10:00 and 18:00 with no call for heat" in result.output
+    )
     assert "offline from 19:35" in result.output
     assert sent == []
     assert load_state() == {"last_checked": None, "faults": {}}
@@ -201,7 +219,9 @@ def test_scheduled_notifies_the_fault_day(monkeypatch, fake, sent):
     on(monkeypatch, date(2026, 11, 11))
     result = run("--scheduled")
     assert result.exit_code == 0, result.output
-    assert sent == [("Tado heat check", "Downstairs Loo warmed with the heating off; Downstairs Loo is offline")]
+    assert sent == [
+        ("Tado heat check", "Downstairs Loo warmed with the heating off; Downstairs Loo is offline")
+    ]
     assert load_state()["last_checked"] == "2026-11-10"
 
 
@@ -233,7 +253,9 @@ def test_scheduled_login_needed_notifies_and_exits_1(monkeypatch, fake, sent):
     on(monkeypatch, date(2026, 11, 11))
     result = run("--scheduled")
     assert result.exit_code == 1
-    assert sent == [("Tado heat check", "Heat check didn't run: Tado login has expired. Run tado auth.")]
+    assert sent == [
+        ("Tado heat check", "Heat check didn't run: Tado login has expired. Run tado auth.")
+    ]
 
 
 def test_scheduled_rate_limited_keeps_saved_days(monkeypatch, fake, sent):
@@ -246,8 +268,13 @@ def test_scheduled_rate_limited_keeps_saved_days(monkeypatch, fake, sent):
     assert load_state()["last_checked"] == "2026-11-09"
     assert load_day_report(date(2026, 11, 9), 12) is not None
     # the fault found before the limit was hit is still notified
-    assert sent == [("Tado heat check",
-                     "Tado's daily request limit was reached; the check will carry on tomorrow.; Downstairs Loo is offline")]
+    assert sent == [
+        (
+            "Tado heat check",
+            "Tado's daily request limit was reached; the check will carry on tomorrow.; "
+            "Downstairs Loo is offline",
+        )
+    ]
 
 
 def test_failed_run_does_not_move_last_checked(monkeypatch, fake, sent):
@@ -263,7 +290,9 @@ def test_scheduled_damaged_state_notifies(monkeypatch, fake, sent, heat_store_di
     on(monkeypatch, date(2026, 11, 11))
     result = run("--scheduled")
     assert result.exit_code == 1
-    assert sent == [("Tado heat check", "Heat check didn't run: a saved file is damaged. See the log.")]
+    assert sent == [
+        ("Tado heat check", "Heat check didn't run: a saved file is damaged. See the log.")
+    ]
     assert (heat_store_dir / "heat_check.json").read_text() == "{"
 
 
@@ -290,7 +319,9 @@ def test_scheduled_with_date_is_a_usage_error(monkeypatch, fake, sent):
 
 def test_notify_passes_text_as_arguments(monkeypatch):
     calls = []
-    monkeypatch.setattr(notify_mod.subprocess, "run", lambda args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setattr(
+        notify_mod.subprocess, "run", lambda args, **kwargs: calls.append((args, kwargs))
+    )
     notify_mod.notify("Tado heat check", 'Loo "quoted" & odd')
     args, kwargs = calls[0]
     assert args[0] == "osascript"
