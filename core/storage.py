@@ -25,6 +25,10 @@ class BatteryHistoryError(click.ClickException):
     """The history file can't be read. Carrying on would overwrite it."""
 
 
+class NoOldBatteries(Exception):
+    """A reading was meant for batteries already taken out, but none have been."""
+
+
 def _load_json(path: str) -> dict:
     try:
         with open(path) as f:
@@ -123,21 +127,49 @@ def mark_battery_replaced(serial: str) -> dict | None:
     return retired
 
 
-def add_meter_reading(serial: str, percents: list[int], on: str | None = None, note: str | None = None) -> dict:
+def add_meter_reading(
+    serial: str,
+    percents: list[int],
+    on: str | None = None,
+    note: str | None = None,
+    old_set: bool = False,
+) -> dict:
     """
-    Record what a battery meter said about the cells now in device SERIAL.
+    Record what a battery meter said about the cells in device SERIAL.
 
     One percentage per cell. Tado only reports NORMAL or LOW, so these are the
     only measure of how much charge was really left when it warned.
-    Raises KeyError if the device has no history.
+
+    Normally the reading belongs to the batteries now fitted. With old_set it
+    goes on the set most recently taken out, dated the day they came out
+    unless ON says otherwise, for a reading not recorded before
+    battery-replaced.
+
+    Raises KeyError if the device has no history, and NoOldBatteries if
+    old_set is asked for but nothing has been replaced.
     """
     history = load_battery_history()
     entry = history[serial]
-    reading = {"date": on or date.today().isoformat(), "percent": list(percents)}
+    if old_set:
+        past = list(entry.get("past_batteries", []))
+        if not past:
+            raise NoOldBatteries(serial)
+        target = past[-1]
+        default_date = target["replaced"]
+    else:
+        target = entry
+        default_date = date.today().isoformat()
+
+    reading = {"date": on or default_date, "percent": list(percents)}
     if note:
         reading["note"] = note
-    readings = sorted([*entry.get("meter_readings", []), reading], key=lambda r: r["date"])
-    history[serial] = {**entry, "meter_readings": readings}
+    readings = sorted([*target.get("meter_readings", []), reading], key=lambda r: r["date"])
+
+    if old_set:
+        past[-1] = {**target, "meter_readings": readings}
+        history[serial] = {**entry, "past_batteries": past}
+    else:
+        history[serial] = {**entry, "meter_readings": readings}
     _save_json(BATTERY_HISTORY_FILE, {"devices": history})
     return reading
 

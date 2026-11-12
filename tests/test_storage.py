@@ -12,6 +12,7 @@ import pytest
 
 from core.storage import (
     BatteryHistoryError,
+    NoOldBatteries,
     _save_json,
     add_meter_reading,
     load_battery_history,
@@ -511,3 +512,38 @@ def test_replacing_a_battery_keeps_its_meter_readings(frozen_today, history_file
     entry = load_battery_history()[SERIAL]
     assert entry["past_batteries"][0]["meter_readings"] == readings
     assert "meter_readings" not in entry
+
+
+# --- readings for the batteries already taken out ---------------------------
+
+OLD_SET = {"fitted": "2026-05-01", "went_low": None, "replaced": "2026-08-20", "days": 111, "minimum": True}
+
+
+def test_a_meter_reading_can_go_on_the_set_last_taken_out(frozen_today, history_file):
+    earlier = {**OLD_SET, "fitted": "2026-01-01", "replaced": "2026-05-01"}
+    _write(history_file, {SERIAL: {"good_since": "2026-08-20", "low_since": None, "past_batteries": [earlier, OLD_SET]}})
+
+    reading = add_meter_reading(SERIAL, [50, 50], note="changed early", old_set=True)
+
+    # Dated the day they came out unless told otherwise
+    assert reading == {"date": "2026-08-20", "percent": [50, 50], "note": "changed early"}
+    entry = load_battery_history()[SERIAL]
+    assert entry["past_batteries"][-1]["meter_readings"] == [reading]
+    assert "meter_readings" not in entry["past_batteries"][0]
+    assert "meter_readings" not in entry
+
+
+def test_an_old_set_reading_can_be_backdated(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-08-20", "low_since": None, "past_batteries": [OLD_SET]}})
+
+    reading = add_meter_reading(SERIAL, [40], on="2026-08-19", old_set=True)
+
+    assert reading["date"] == "2026-08-19"
+
+
+def test_an_old_set_reading_is_refused_with_nothing_taken_out(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
+
+    with pytest.raises(NoOldBatteries):
+        add_meter_reading(SERIAL, [50], old_set=True)
+    assert "meter_readings" not in history_file.read_text()

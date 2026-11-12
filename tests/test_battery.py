@@ -487,6 +487,29 @@ def test_reading_command_refuses_bad_input(frozen_today, history_file, args):
     assert "meter_readings" not in history_file.read_text()
 
 
+def test_reading_command_puts_an_old_set_reading_on_the_batteries_taken_out(frozen_today, history_file):
+    old = {"fitted": "2026-05-01", "went_low": None, "replaced": "2026-08-20", "days": 111, "minimum": True}
+    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-08-20", "low_since": None, "past_batteries": [old]}}}))
+
+    result = CliRunner().invoke(battery_mod.battery_reading_command, ["VA1", "50", "50", "--old-set"])
+
+    assert result.exit_code == 0, result.output
+    assert "taken out on 2026-08-20" in result.output
+    saved = json.loads(history_file.read_text())["devices"]["VA1"]
+    assert saved["past_batteries"][0]["meter_readings"] == [{"date": "2026-08-20", "percent": [50, 50]}]
+    assert "meter_readings" not in saved
+
+
+def test_reading_command_refuses_an_old_set_reading_with_nothing_taken_out(frozen_today, history_file):
+    history_file.write_text(json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}}))
+
+    result = CliRunner().invoke(battery_mod.battery_reading_command, ["VA1", "50", "--old-set"])
+
+    assert result.exit_code != 0
+    assert "no replaced batteries" in result.output
+    assert "meter_readings" not in history_file.read_text()
+
+
 def test_reading_command_refuses_an_unknown_device(frozen_today, history_file):
     history_file.write_text(json.dumps({"devices": {}}))
 
