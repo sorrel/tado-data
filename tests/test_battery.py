@@ -93,6 +93,30 @@ def test_format_last_uses_the_most_recent_battery():
     assert click.unstyle(_format_last(past)) == "  204d"
 
 
+# --- _format_average ------------------------------------------------------
+
+
+def test_format_average_is_blank_with_no_past_batteries():
+    assert click.unstyle(battery_mod._format_average([])) == " " * 8
+
+
+def test_format_average_is_blank_when_every_set_is_of_unknown_age():
+    """A minimum isn't a lifespan, so there is nothing to average yet."""
+    past = [{"days": 209, "minimum": True}]
+
+    assert click.unstyle(battery_mod._format_average(past)) == " " * 8
+
+
+def test_format_average_shows_the_mean_and_how_many_sets():
+    past = [
+        {"days": 200, "minimum": False},
+        {"days": 209, "minimum": True},
+        {"days": 210, "minimum": False},
+    ]
+
+    assert click.unstyle(battery_mod._format_average(past)) == " 205d ×2"
+
+
 # --- the report itself ----------------------------------------------------
 
 
@@ -139,6 +163,8 @@ def test_report_shows_the_last_lifespan_after_a_replacement(
     assert result.exit_code == 0
     assert "Last" in result.output
     assert "111d" in result.output
+    assert "Average" in result.output
+    assert "111d ×1" in result.output
 
 
 # --- first low, latest low and how many -------------------------------------
@@ -269,6 +295,36 @@ def test_history_shows_the_average_and_what_it_left_out(frozen_today, history_fi
 
     assert "Average: 150d from 2 sets" in result.output
     assert "1 of unknown age not counted" in result.output
+
+
+def test_history_shows_each_devices_own_average(frozen_today, history_file, monkeypatch):
+    _seed_history(
+        history_file,
+        [
+            _past("2026-04-19", 200),
+            _past("2026-04-20", 100),
+            _past("2026-04-17", 206, minimum=True),
+        ],
+    )
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    assert "Average by device" in result.output
+    by_device = result.output.split("Average by device")[1]
+    assert "Lounge" in by_device
+    assert "150d ×2" in by_device
+
+
+def test_history_has_no_device_averages_until_a_set_is_measured(
+    frozen_today, history_file, monkeypatch
+):
+    _seed_history(history_file, [_past("2026-04-17", 206, minimum=True)])
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    assert "Average by device" not in result.output
 
 
 def test_history_says_so_when_nothing_has_been_replaced(frozen_today, history_file, monkeypatch):
