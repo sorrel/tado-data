@@ -84,6 +84,16 @@ def _average_days(lifespans: Sequence[Lifespan]) -> int | None:
     return round(sum(measured) / len(measured))
 
 
+def _format_average(past_batteries: Sequence[Lifespan]) -> str:
+    """The Average column: mean measured lifespan and how many sets, e.g. "205d ×2"."""
+    average = _average_days(past_batteries)
+    if average is None:
+        return " " * 8
+    measured = sum(1 for b in past_batteries if not b.get("minimum"))
+    label = f"{average}d ×{measured}"
+    return click.style(f"{label:>8}", fg=_age_colour(average), bold=True)
+
+
 def _on_low(battery: PastBattery) -> Lifespan | None:
     """How long a battery kept going once low; a minimum if it was replaced before dying."""
     if not (went_low := battery["went_low"]):
@@ -323,6 +333,7 @@ def _print_battery_table(battery_devices: list[dict]) -> None:
         f"{'Good since':<10}  "
         f"{'Age':>6}  "
         f"{'Last':>6}  "
+        f"{'Average':>8}  "
         f"{'First low':<10}  "
         f"{'Latest low':<10}  "
         f"{'Lows':>4}  "
@@ -348,12 +359,13 @@ def _mains_cells() -> list[str]:
         click.style(f"{na:<10}", fg="bright_black"),
         click.style(f"{na:>6}", fg="bright_black"),
         click.style(f"{na:>6}", fg="bright_black"),
+        click.style(f"{na:>8}", fg="bright_black"),
         click.style(f"{na:<10}  {na:<10}  {na:>4}", fg="bright_black"),
     ]
 
 
 def _battery_cells(d: dict) -> list[str]:
-    """The battery columns: state, good since, age, last lifespan and low warnings."""
+    """The battery columns: state, good since, age, lifespans and low warnings."""
     is_low = d["battery"] == "LOW"
     if is_low:
         battery_str = click.style(f"{'LOW':>8}", fg="red", bold=True)
@@ -372,6 +384,7 @@ def _battery_cells(d: dict) -> list[str]:
         f"{d['good_since'] or '':<10}",
         age_str,
         _format_last(d["past_batteries"]),
+        _format_average(d["past_batteries"]),
         _format_lows(d["low_periods"], is_low),
     ]
 
@@ -563,6 +576,31 @@ def _print_lifespans(lifespans: list[tuple[str, PastBattery]], device_zones: dic
         )
 
     _print_lifespan_averages([battery for _, battery in lifespans])
+    _print_device_averages(rows, zone_width, serial_width)
+
+
+def _print_device_averages(
+    rows: list[tuple[str, str, PastBattery]], zone_width: int, serial_width: int
+) -> None:
+    """Print each device's own average lifespan, for devices with a measured set."""
+    by_device: dict[tuple[str, str], list[PastBattery]] = {}
+    for zone, serial, battery in rows:
+        by_device.setdefault((zone, serial), []).append(battery)
+    averages = [
+        (zone, serial, average)
+        for (zone, serial), batteries in by_device.items()
+        if (average := _format_average(batteries)).strip()
+    ]
+    if not averages:
+        return
+
+    header = f"  {'Zone':<{zone_width}}  {'Serial':<{serial_width}}  {'Average':>8}"
+    click.echo(click.style("  Average by device", fg="bright_white", bold=True))
+    click.echo(click.style(header, fg="bright_white", bold=True))
+    click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
+    for zone, serial, average in averages:
+        click.echo(f"  {zone:<{zone_width}}  {serial:<{serial_width}}  {average}")
+    click.echo()
 
 
 def _print_lifespan_averages(all_batteries: list[PastBattery]) -> None:
