@@ -351,6 +351,7 @@ def _add_history(battery_devices: list[dict]) -> None:
         d["good_since"] = entry.get("good_since")
         d["low_periods"] = entry.get("low_periods", [])
         d["past_batteries"] = entry.get("past_batteries", [])
+        d["make"] = entry.get("make", "")
 
 
 def _print_battery_table(battery_devices: list[dict]) -> None:
@@ -371,7 +372,8 @@ def _print_battery_table(battery_devices: list[dict]) -> None:
         f"{'First low':<10}  "
         f"{'Latest low':<10}  "
         f"{'Lows':>4}  "
-        f"{'Connected':>9}"
+        f"{'Connected':>9}  "
+        "Make"
     )
     click.echo()
     click.echo(click.style(header, fg="bright_white", bold=True))
@@ -382,7 +384,9 @@ def _print_battery_table(battery_devices: list[dict]) -> None:
             f"  {d['zone']:<{zone_width}}  {d['type']:<{type_width}}  {d['name']:<{name_width}}"
         )
         cells = _mains_cells() if d["mains"] else _battery_cells(d)
-        click.echo("  ".join([device, *cells, _format_connected(d["connection"])]))
+        make = "" if d["mains"] else _cell(d["make"], 0, **MAKE_STYLE)
+        row = "  ".join([device, *cells, _format_connected(d["connection"]), make])
+        click.echo(row.rstrip())
 
 
 def _mains_cells() -> list[str]:

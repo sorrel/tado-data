@@ -168,6 +168,47 @@ def test_report_shows_the_last_lifespan_after_a_replacement(
     assert "111d ×1" in result.output
 
 
+def test_report_shows_the_make_of_the_batteries_now_fitted(frozen_today, history_file, monkeypatch):
+    history_file.write_text(
+        json.dumps(
+            {
+                "devices": {
+                    "VA1": {
+                        "good_since": "2026-08-20",
+                        "low_since": None,
+                        "make": "Duracell",
+                        "past_batteries": [{"days": 111, "minimum": False, "make": "Ikea"}],
+                    }
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_command)
+
+    assert result.exit_code == 0
+    header, _, row = click.unstyle(result.output).strip("\n").splitlines()[:3]
+    assert header.rstrip().endswith("Make")
+    assert row.rstrip().endswith("Duracell")
+    assert "Ikea" not in result.output  # a set already taken out isn't the one fitted
+
+
+def test_report_leaves_the_make_blank_when_none_is_recorded(
+    frozen_today, history_file, monkeypatch
+):
+    history_file.write_text(
+        json.dumps({"devices": {"VA1": {"good_since": "2026-08-20", "low_since": None}}})
+    )
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_command)
+
+    assert result.exit_code == 0
+    row = click.unstyle(result.output).strip("\n").splitlines()[2]
+    assert row.rstrip().endswith("Yes") or row.rstrip().endswith("No")
+
+
 # --- first low, latest low and how many -------------------------------------
 
 
