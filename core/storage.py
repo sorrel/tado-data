@@ -172,8 +172,11 @@ def mark_battery_replaced(serial: str) -> PastBattery | None:
         retired = _retired_battery(fitted, entry.get("low_since"), today, entry.get("died"))
     if retired:
         # Spells of LOW and meter readings belong to this set, so they go with it.
+        # A spell still open ends today: these batteries can't be low any longer.
         if periods := entry.get("low_periods"):
-            retired["low_periods"] = periods
+            retired["low_periods"] = [
+                period if period["to"] else {**period, "to": today} for period in periods
+            ]
         if readings := entry.get("meter_readings"):
             retired["meter_readings"] = readings
         past.append(retired)
