@@ -6,6 +6,7 @@ small stub stands in for it — no network, per CLAUDE.md.
 """
 
 import json
+import re
 
 import click
 import pytest
@@ -482,7 +483,7 @@ def test_replaced_command_saves_the_lifespan(frozen_today, history_file):
         json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": "2026-08-20"}}})
     )
 
-    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"])
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"], input="\n\n")
 
     assert result.exit_code == 0
     assert "111" in result.output
@@ -496,7 +497,7 @@ def test_replaced_command_keeps_a_never_low_battery_as_a_minimum(frozen_today, h
         json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}})
     )
 
-    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"])
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"], input="\n\n")
 
     assert result.exit_code == 0
     assert "never gave a low warning" in result.output
@@ -510,9 +511,9 @@ def test_replaced_command_twice_in_a_day_changes_nothing(frozen_today, history_f
         json.dumps({"devices": {"VA1": {"good_since": "2026-05-01", "low_since": None}}})
     )
     runner = CliRunner()
-    runner.invoke(battery_mod.battery_replaced_command, ["va1"])
+    runner.invoke(battery_mod.battery_replaced_command, ["va1"], input="\n\n")
 
-    result = runner.invoke(battery_mod.battery_replaced_command, ["va1"])
+    result = runner.invoke(battery_mod.battery_replaced_command, ["va1"], input="\n\n")
 
     assert "already marked as replaced today" in result.output
     assert len(json.loads(history_file.read_text())["devices"]["VA1"]["past_batteries"]) == 1
@@ -574,6 +575,138 @@ def test_replaced_command_refuses_an_unknown_serial(frozen_today, history_file):
 
     assert result.exit_code != 0
     assert "No battery history for VA9" in result.output
+
+
+# --- battery makes ----------------------------------------------------------
+
+
+def _seed(history_file, entry):
+    history_file.write_text(json.dumps({"devices": {"VA1": entry}}))
+    return lambda: json.loads(history_file.read_text())["devices"]["VA1"]
+
+
+def test_replaced_command_asks_both_makes_when_the_old_one_is_unknown(frozen_today, history_file):
+    saved = _seed(history_file, {"good_since": "2026-05-01", "low_since": "2026-08-20"})
+
+    result = CliRunner().invoke(
+        battery_mod.battery_replaced_command, ["va1"], input="Duracell\nEnergizer\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Make of the new batteries" in result.output
+    assert "Make of the batteries taken out" in result.output
+    assert saved()["make"] == "Duracell"
+    assert saved()["past_batteries"][0]["make"] == "Energizer"
+
+
+def test_replaced_command_asks_only_the_new_make_when_the_old_one_is_known(
+    frozen_today, history_file
+):
+    saved = _seed(
+        history_file, {"good_since": "2026-05-01", "low_since": None, "make": "Energizer"}
+    )
+
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"], input="duracell\n")
+
+    assert result.exit_code == 0, result.output
+    assert "taken out" not in result.output
+    assert "Makes recorded so far: Energizer" in result.output
+    assert saved()["make"] == "duracell"
+    assert saved()["past_batteries"][0]["make"] == "Energizer"
+
+
+def test_skipping_the_make_prompts_saves_no_make(frozen_today, history_file):
+    saved = _seed(history_file, {"good_since": "2026-05-01", "low_since": None})
+
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"], input="\n\n")
+
+    assert result.exit_code == 0, result.output
+    assert "make" not in saved()
+    assert "make" not in saved()["past_batteries"][0]
+
+
+def test_replaced_command_takes_the_makes_as_options_without_asking(frozen_today, history_file):
+    saved = _seed(history_file, {"good_since": "2026-05-01", "low_since": None})
+
+    result = CliRunner().invoke(
+        battery_mod.battery_replaced_command, ["va1", "--make", "Ikea", "--old-make", "Varta"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Enter to skip" not in result.output
+    assert saved()["make"] == "Ikea"
+    assert saved()["past_batteries"][0]["make"] == "Varta"
+
+
+def test_replaced_twice_in_a_day_asks_nothing(frozen_today, history_file):
+    _seed(history_file, {"good_since": "2026-08-25", "low_since": None})
+
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"])
+
+    assert result.exit_code == 0, result.output
+    assert "already marked as replaced today" in result.output
+    assert "Enter to skip" not in result.output
+
+
+def test_make_command_records_the_make_of_the_fitted_set(frozen_today, history_file):
+    saved = _seed(history_file, {"good_since": "2026-05-01", "low_since": None})
+
+    result = CliRunner().invoke(battery_mod.battery_make_command, ["va1", "Duracell"])
+
+    assert result.exit_code == 0, result.output
+    assert saved()["make"] == "Duracell"
+
+
+def test_make_command_old_set_corrects_the_set_taken_out(frozen_today, history_file):
+    past = {"fitted": "2026-01-01", "went_low": None, "replaced": "2026-05-01", "days": 120,
+            "minimum": True, "make": "Duracel"}  # fmt: skip
+    saved = _seed(
+        history_file, {"good_since": "2026-05-01", "low_since": None, "past_batteries": [past]}
+    )
+
+    result = CliRunner().invoke(battery_mod.battery_make_command, ["va1", "Duracell", "--old-set"])
+
+    assert result.exit_code == 0, result.output
+    assert "taken out on 2026-05-01" in result.output
+    assert saved()["past_batteries"][0]["make"] == "Duracell"
+
+
+def test_make_command_old_set_without_a_replacement_is_refused(frozen_today, history_file):
+    _seed(history_file, {"good_since": "2026-05-01", "low_since": None})
+
+    result = CliRunner().invoke(battery_mod.battery_make_command, ["va1", "Ikea", "--old-set"])
+
+    assert result.exit_code != 0
+    assert "no replaced batteries" in result.output
+
+
+def test_history_shows_each_set_s_make_and_the_average_by_make(
+    frozen_today, history_file, monkeypatch
+):
+    def past(fitted, went_low, days, make):
+        return {"fitted": fitted, "went_low": went_low, "replaced": went_low,
+                "days": days, "minimum": False, "make": make}  # fmt: skip
+
+    _seed(
+        history_file,
+        {
+            "good_since": "2026-08-25",
+            "low_since": None,
+            "past_batteries": [
+                past("2025-01-01", "2025-07-20", 200, "Duracell"),
+                past("2025-07-20", "2026-02-25", 220, "Duracell"),
+                past("2026-02-25", "2026-08-25", 181, "Ikea"),
+            ],
+        },
+    )
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    assert result.exit_code == 0, result.output
+    assert "Average by make" in result.output
+    assert re.search(r"Duracell\s+210d ×2", click.unstyle(result.output))
+    assert re.search(r"Ikea\s+181d ×1", click.unstyle(result.output))
 
 
 # --- _get_device_zone_map -------------------------------------------------
@@ -835,7 +968,7 @@ def rooms(frozen_today, history_file, monkeypatch):
 
 
 def test_replaced_command_takes_a_room_name(rooms):
-    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["hall"])
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["hall"], input="\n\n")
 
     assert result.exit_code == 0, result.output
     assert "Hall: VA1" in result.output  # the mains-wired thermostat is left out
@@ -847,7 +980,7 @@ def test_a_misspelt_room_is_confirmed_first(rooms):
     assert declined.exit_code != 0
     assert "past_batteries" not in rooms.read_text()
 
-    accepted = CliRunner().invoke(battery_mod.battery_replaced_command, ["kitchn"], input="y\n")
+    accepted = CliRunner().invoke(battery_mod.battery_replaced_command, ["kitchn"], input="y\n\n\n")
     assert accepted.exit_code == 0, accepted.output
     assert "Kitchen (VA2)" in accepted.output
     assert "past_batteries" in json.loads(rooms.read_text())["devices"]["VA2"]
@@ -886,7 +1019,7 @@ def test_a_serial_never_contacts_tado(frozen_today, history_file, monkeypatch):
             raise AssertionError("a serial must not need Tado")
 
     monkeypatch.setattr(battery_mod, "TadoClient", NoClient)
-    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"])
+    result = CliRunner().invoke(battery_mod.battery_replaced_command, ["va1"], input="\n\n")
 
     assert result.exit_code == 0, result.output
 

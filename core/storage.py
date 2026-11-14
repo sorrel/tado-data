@@ -47,6 +47,7 @@ class PastBattery(Lifespan):
     fitted: str
     went_low: str | None  # None: taken out before it ever warned
     replaced: str
+    make: NotRequired[str]  # brand of the AA cells, when known
     died: NotRequired[str]  # first day seen offline while LOW
     low_periods: NotRequired[list[LowPeriod]]
     meter_readings: NotRequired[list[MeterReading]]
@@ -57,6 +58,7 @@ class DeviceHistory(TypedDict):
 
     good_since: str | None  # when these batteries were fitted (or tracking began)
     low_since: str | None  # first low warning; kept even if it goes back to NORMAL
+    make: NotRequired[str]  # brand of the AA cells now fitted, when known
     died: NotRequired[str]
     low_periods: NotRequired[list[LowPeriod]]
     meter_readings: NotRequired[list[MeterReading]]
@@ -150,9 +152,47 @@ def _retired_battery(
     return record
 
 
-def mark_battery_replaced(serial: str) -> PastBattery | None:
+def replaced_today(entry: DeviceHistory) -> bool:
+    """Whether these batteries were fitted today and haven't warned since."""
+    return entry.get("good_since") == date.today().isoformat() and not entry.get("low_since")
+
+
+def known_makes(history: BatteryHistory) -> list[str]:
+    """Every battery make recorded so far, in alphabetical order."""
+    makes = {entry["make"] for entry in history.values() if "make" in entry}
+    makes |= {
+        battery["make"]
+        for entry in history.values()
+        for battery in entry.get("past_batteries", [])
+        if "make" in battery
+    }
+    return sorted(makes, key=str.casefold)
+
+
+def tidy_make(make: str | None, history: BatteryHistory) -> str | None:
+    """
+    MAKE with spare spaces removed, spelt as before if it was recorded already.
+
+    "duracell" becomes "Duracell" once Duracell is known, so one make isn't
+    counted as two. A blank make is None.
+    """
+    make = " ".join((make or "").split())
+    if not make:
+        return None
+    for known in known_makes(history):
+        if known.casefold() == make.casefold():
+            return known
+    return make
+
+
+def mark_battery_replaced(
+    serial: str, make: str | None = None, old_make: str | None = None
+) -> PastBattery | None:
     """
     Record that the user has replaced a device's batteries, and restart its clock.
+
+    MAKE is the brand of the new batteries. OLD_MAKE is the brand of the ones
+    taken out, used only if it wasn't recorded when they went in.
 
     Returns the saved record of the old battery, or None if its dates are
     unusable. A battery that never went LOW is kept as a minimum lifespan.
@@ -163,8 +203,10 @@ def mark_battery_replaced(serial: str) -> PastBattery | None:
     history = load_battery_history()
     entry = history[serial]
     today = date.today().isoformat()
-    if entry.get("good_since") == today and not entry.get("low_since"):
+    if replaced_today(entry):
         raise AlreadyReplacedToday(serial)
+    make = tidy_make(make, history)
+    old_make = entry.get("make") or tidy_make(old_make, history)
 
     past = list(entry.get("past_batteries", []))
     retired = None
@@ -179,14 +221,46 @@ def mark_battery_replaced(serial: str) -> PastBattery | None:
             ]
         if readings := entry.get("meter_readings"):
             retired["meter_readings"] = readings
+        if old_make:
+            retired["make"] = old_make
         past.append(retired)
 
     new_entry: DeviceHistory = {"good_since": today, "low_since": None}
+    if make:
+        new_entry["make"] = make
     if past:
         new_entry["past_batteries"] = past
     history[serial] = new_entry
     _save_json(BATTERY_HISTORY_FILE, {"devices": history})
     return retired
+
+
+def set_battery_make(serial: str, make: str, old_set: bool = False) -> tuple[str, str | None]:
+    """
+    Record or correct the make of the batteries now in device SERIAL.
+
+    With old_set it goes on the set most recently taken out instead.
+    Returns the make as saved, and the day that set came out (None for the
+    batteries now fitted). Raises KeyError if the device has no history,
+    NoOldBatteries if old_set is asked for but nothing has been replaced, and
+    ValueError if MAKE is blank.
+    """
+    history = load_battery_history()
+    entry = history[serial]
+    tidied = tidy_make(make, history)
+    if not tidied:
+        raise ValueError("blank make")
+    if not old_set:
+        history[serial] = {**entry, "make": tidied}
+        _save_json(BATTERY_HISTORY_FILE, {"devices": history})
+        return tidied, None
+    past = list(entry.get("past_batteries", []))
+    if not past:
+        raise NoOldBatteries(serial)
+    past[-1] = {**past[-1], "make": tidied}
+    history[serial] = {**entry, "past_batteries": past}
+    _save_json(BATTERY_HISTORY_FILE, {"devices": history})
+    return tidied, past[-1]["replaced"]
 
 
 def _with_reading[R: (DeviceHistory, PastBattery)](record: R, reading: MeterReading) -> R:
@@ -310,11 +384,13 @@ def _updated_entry(entry: DeviceHistory, state: str, offline: bool, today: str) 
             new_died = entry.get("died") or today
 
     new_entry: DeviceHistory = {"good_since": new_good, "low_since": new_low}
+    if make := entry.get("make"):
+        new_entry["make"] = make
     if new_died:
         new_entry["died"] = new_died
     if periods:
         new_entry["low_periods"] = periods
-    # Readings and past batteries are only ever changed by their own commands.
+    # The make, readings and past batteries are only ever changed by their own commands.
     if readings := entry.get("meter_readings"):
         new_entry["meter_readings"] = readings
     if past := entry.get("past_batteries"):
