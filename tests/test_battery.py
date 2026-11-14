@@ -891,6 +891,48 @@ def test_history_lists_meter_readings_now_and_from_replaced_batteries(
     assert "90%, 90%" in result.output
 
 
+def test_history_says_whether_each_read_set_is_still_fitted(
+    frozen_today, history_file, monkeypatch
+):
+    """A note written at the time ("left in for now") goes stale once the set is
+    replaced, so each reading shows what has become of its batteries since."""
+    history_file.write_text(
+        json.dumps(
+            {
+                "devices": {
+                    "VA1": {
+                        "good_since": "2026-11-10",
+                        "low_since": None,
+                        "meter_readings": [{"date": "2026-11-12", "percent": [80, 80]}],
+                        "past_batteries": [
+                            {
+                                **_past("2026-04-19", 204),
+                                "meter_readings": [
+                                    {
+                                        "date": "2026-11-09",
+                                        "percent": [30, 40],
+                                        "note": "left in for now",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    lines = result.output.splitlines()
+    old = next(line for line in lines if "30%, 40%" in line)
+    new = next(line for line in lines if "80%, 80%" in line)
+    assert "out 2026-11-10" in old
+    assert "still in" in new
+    assert "Batteries" in result.output
+
+
 def test_history_shows_meter_readings_on_their_own(frozen_today, history_file, monkeypatch):
     history_file.write_text(
         json.dumps(
