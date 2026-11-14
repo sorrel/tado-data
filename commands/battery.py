@@ -585,28 +585,38 @@ def battery_reading_command(device, percents, on, note, old_set):
     click.echo(message + ".")
 
 
-def _print_meter_readings(readings: list[tuple[str, MeterReading]], device_zones: dict) -> None:
-    """Print every battery meter reading taken, oldest first."""
+def _print_meter_readings(
+    readings: list[tuple[str, MeterReading, str | None]], device_zones: dict
+) -> None:
+    """Print every battery meter reading taken, oldest first, with whether that set of
+    batteries is still in (replaced is None) or when it came out, since a note written
+    at the time ("left in for now") can't say what happened next."""
     rows = sorted(
-        ((device_zones.get(serial, "Unassigned"), serial, reading) for serial, reading in readings),
+        (
+            (device_zones.get(serial, "Unassigned"), serial, reading, replaced)
+            for serial, reading, replaced in readings
+        ),
         key=lambda row: (row[2]["date"], row[0]),
     )
-    zone_width = max(len("Zone"), *(len(zone) for zone, _, _ in rows))
-    serial_width = max(len("Serial"), *(len(serial) for _, serial, _ in rows))
-    percents = [_format_percents(reading["percent"]) for _, _, reading in rows]
+    zone_width = max(len("Zone"), *(len(row[0]) for row in rows))
+    serial_width = max(len("Serial"), *(len(row[1]) for row in rows))
+    percents = [_format_percents(row[2]["percent"]) for row in rows]
     percent_width = max(len("Reading"), *(len(p) for p in percents))
+    fates = [f"out {row[3]}" if row[3] else "still in" for row in rows]
+    fate_width = max(len("Batteries"), *(len(f) for f in fates))
 
     header = (
         f"  {'Zone':<{zone_width}}  {'Serial':<{serial_width}}  "
-        f"{'Date':<10}  {'Reading':<{percent_width}}  Note"
+        f"{'Date':<10}  {'Reading':<{percent_width}}  {'Batteries':<{fate_width}}  Note"
     )
     click.echo(click.style("  Meter readings", fg="bright_white", bold=True))
     click.echo(click.style(header, fg="bright_white", bold=True))
     click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
-    for (zone, serial, reading), percent in zip(rows, percents):
+    for (zone, serial, reading, _), percent, fate in zip(rows, percents, fates):
         click.echo(
             f"  {zone:<{zone_width}}  {serial:<{serial_width}}  {reading['date']:<10}  "
-            f"{percent:<{percent_width}}  {reading.get('note', '')}".rstrip()
+            f"{percent:<{percent_width}}  {fate:<{fate_width}}  "
+            f"{reading.get('note', '')}".rstrip()
         )
     click.echo()
 
@@ -782,11 +792,15 @@ def battery_history_command():
         for serial, battery in lifespans
         for period in battery.get("low_periods", [])
     ]
-    readings = [
-        (serial, r) for serial, entry in history.items() for r in entry.get("meter_readings", [])
+    readings: list[tuple[str, MeterReading, str | None]] = [
+        (serial, r, None)
+        for serial, entry in history.items()
+        for r in entry.get("meter_readings", [])
     ]
     readings += [
-        (serial, r) for serial, battery in lifespans for r in battery.get("meter_readings", [])
+        (serial, r, battery["replaced"])
+        for serial, battery in lifespans
+        for r in battery.get("meter_readings", [])
     ]
 
     if not lifespans and not lows and not readings:
