@@ -6,6 +6,7 @@ import difflib
 import re
 from collections.abc import Sequence
 from datetime import date
+from typing import Any
 
 import click
 from click.shell_completion import CompletionItem
@@ -39,6 +40,35 @@ MAINS_WIRED_SERIALS = {"SU3893321984"}
 
 # Shown in a table cell that has nothing to show.
 NO_VALUE = "—"
+
+# battery-history colours: one per kind of value, so each column reads at a glance.
+SECTION_STYLE: dict[str, Any] = {"fg": "bright_cyan", "bold": True}
+ZONE_STYLE: dict[str, Any] = {"bold": True}
+SERIAL_STYLE: dict[str, Any] = {"fg": "bright_black"}
+LOW_STYLE: dict[str, Any] = {"fg": "yellow"}
+STILL_LOW_STYLE: dict[str, Any] = {"fg": "bright_red", "bold": True}
+GOOD_STYLE: dict[str, Any] = {"fg": "green"}
+MAKE_STYLE: dict[str, Any] = {"fg": "bright_blue"}
+
+
+def _cell(value: object, width: int, align: str = "<", **style: Any) -> str:
+    """Pad a table cell first, then colour it, so the colour codes don't upset the columns."""
+    padded = f"{value!s:{align}{width}}"
+    return click.style(padded, **style) if style and padded else padded
+
+
+def _echo_section(title: str, header: str) -> None:
+    """A section title, its column header and the rule under it."""
+    click.echo(click.style(f"  {title}", **SECTION_STYLE))
+    click.echo(click.style(header, fg="bright_white", bold=True))
+    click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
+
+
+def _percent_colour(percent: int) -> str:
+    """Green for a healthy cell, yellow for a part-used one, red for a nearly flat one."""
+    if percent >= 70:
+        return "green"
+    return "yellow" if percent >= 40 else "bright_red"
 
 
 def _count(number: int, noun: str) -> str:
@@ -609,16 +639,21 @@ def _print_meter_readings(
         f"  {'Zone':<{zone_width}}  {'Serial':<{serial_width}}  "
         f"{'Date':<10}  {'Reading':<{percent_width}}  {'Batteries':<{fate_width}}  Note"
     )
-    click.echo(click.style("  Meter readings", fg="bright_white", bold=True))
-    click.echo(click.style(header, fg="bright_white", bold=True))
-    click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
-    for (zone, serial, reading, _), percent, fate in zip(rows, percents, fates):
+    _echo_section("Meter readings", header)
+    for (zone, serial, reading, replaced), percent, fate in zip(rows, percents, fates):
         click.echo(
-            f"  {zone:<{zone_width}}  {serial:<{serial_width}}  {reading['date']:<10}  "
-            f"{percent:<{percent_width}}  {fate:<{fate_width}}  "
+            f"  {_cell(zone, zone_width, **ZONE_STYLE)}  "
+            f"{_cell(serial, serial_width, **SERIAL_STYLE)}  {reading['date']:<10}  "
+            f"{_coloured_percents(reading['percent'])}{' ' * (percent_width - len(percent))}  "
+            f"{_cell(fate, fate_width, **(SERIAL_STYLE if replaced else GOOD_STYLE))}  "
             f"{reading.get('note', '')}".rstrip()
         )
     click.echo()
+
+
+def _coloured_percents(percents: list[int]) -> str:
+    """The Reading cell, each cell's percentage coloured by how full it is."""
+    return ", ".join(click.style(f"{p}%", fg=_percent_colour(p), bold=True) for p in percents)
 
 
 def _print_lifespans(lifespans: list[tuple[str, PastBattery]], device_zones: dict) -> None:
@@ -644,19 +679,19 @@ def _print_lifespans(lifespans: list[tuple[str, PastBattery]], device_zones: dic
         "Make"
     )
     click.echo()
-    click.echo(click.style(header, fg="bright_white", bold=True))
-    click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
+    _echo_section("Replaced batteries", header)
 
     for zone, serial, battery in rows:
+        went_low = battery["went_low"]
         click.echo(
-            f"  {zone:<{zone_width}}  "
-            f"{serial:<{serial_width}}  "
+            f"  {_cell(zone, zone_width, **ZONE_STYLE)}  "
+            f"{_cell(serial, serial_width, **SERIAL_STYLE)}  "
             f"{battery['fitted']:<10}  "
-            f"{battery['went_low'] or 'never':<10}  "
+            f"{_cell(went_low or 'never', 10, **(LOW_STYLE if went_low else GOOD_STYLE))}  "
             f"{battery['replaced']:<10}  "
             f"{_format_last([battery])}  "
             f"{_format_on_low(battery)}  "
-            f"{battery.get('make', '')}".rstrip()
+            f"{_cell(battery.get('make', ''), 0, **MAKE_STYLE)}".rstrip()
         )
 
     all_batteries = [battery for _, battery in lifespans]
@@ -681,11 +716,9 @@ def _print_make_averages(all_batteries: list[PastBattery]) -> None:
 
     make_width = max(len("Make"), *(len(make) for make, _ in averages))
     header = f"  {'Make':<{make_width}}  {'Average':>8}"
-    click.echo(click.style("  Average by make", fg="bright_white", bold=True))
-    click.echo(click.style(header, fg="bright_white", bold=True))
-    click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
+    _echo_section("Average by make", header)
     for make, average in averages:
-        click.echo(f"  {make:<{make_width}}  {average}")
+        click.echo(f"  {_cell(make, make_width, **MAKE_STYLE)}  {average}")
     click.echo()
 
 
@@ -705,11 +738,12 @@ def _print_device_averages(
         return
 
     header = f"  {'Zone':<{zone_width}}  {'Serial':<{serial_width}}  {'Average':>8}"
-    click.echo(click.style("  Average by device", fg="bright_white", bold=True))
-    click.echo(click.style(header, fg="bright_white", bold=True))
-    click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
+    _echo_section("Average by device", header)
     for zone, serial, average in averages:
-        click.echo(f"  {zone:<{zone_width}}  {serial:<{serial_width}}  {average}")
+        click.echo(
+            f"  {_cell(zone, zone_width, **ZONE_STYLE)}  "
+            f"{_cell(serial, serial_width, **SERIAL_STYLE)}  {average}"
+        )
     click.echo()
 
 
@@ -721,10 +755,14 @@ def _print_lifespan_averages(all_batteries: list[PastBattery]) -> None:
     average = _average_days(all_batteries)
 
     click.echo()
+    label = click.style("Average:", **SECTION_STYLE)
     if average is None:
-        click.echo("  Average: none yet, every set so far is of unknown age")
+        click.echo(
+            f"  {label} " + click.style("none yet, every set so far is of unknown age", dim=True)
+        )
     else:
-        summary = f"  Average: {average}d from {_count(measured, 'set')}"
+        days = click.style(f"{average}d", fg=_age_colour(average), bold=True)
+        summary = f"  {label} {days} from {_count(measured, 'set')}"
         if unknown:
             summary += click.style(f" ({unknown} of unknown age not counted)", fg="bright_black")
         click.echo(summary)
@@ -734,7 +772,9 @@ def _print_lifespan_averages(all_batteries: list[PastBattery]) -> None:
     low_average = _average_days(on_low)
     if low_average is not None:
         died = sum(1 for battery in on_low if not battery["minimum"])
-        click.echo(f"  Average on low: {low_average}d from {_count(died, 'set')}")
+        label = click.style("Average on low:", **SECTION_STYLE)
+        days = click.style(f"{low_average}d", fg=_age_colour(low_average), bold=True)
+        click.echo(f"  {label} {days} from {_count(died, 'set')}")
     click.echo()
 
 
@@ -755,20 +795,19 @@ def _print_low_periods(lows: list[tuple[str, LowPeriod]], device_zones: dict) ->
         f"{'Normal again':<12}  "
         f"{'Days':>6}"
     )
-    click.echo(click.style("  Low warnings", fg="bright_white", bold=True))
-    click.echo(click.style(header, fg="bright_white", bold=True))
-    click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
+    _echo_section("Low warnings", header)
 
     for zone, serial, period in rows:
         end = date.fromisoformat(period["to"]) if period["to"] else date.today()
         days = (end - date.fromisoformat(period["from"])).days
+        still_low = period["to"] is None
         click.echo(
-            f"  {zone:<{zone_width}}  "
-            f"{serial:<{serial_width}}  "
-            f"{period['from']:<10}  "
-            f"{period.get('seen') or period['from']:<10}  "
-            f"{period['to'] or 'still low':<12}  "
-            f"{days:>5}d"
+            f"  {_cell(zone, zone_width, **ZONE_STYLE)}  "
+            f"{_cell(serial, serial_width, **SERIAL_STYLE)}  "
+            f"{_cell(period['from'], 10, **LOW_STYLE)}  "
+            f"{_cell(period.get('seen') or period['from'], 10, **LOW_STYLE)}  "
+            f"{_cell(period['to'] or 'still low', 12, **(STILL_LOW_STYLE if still_low else GOOD_STYLE))}  "
+            f"{_cell(f'{days}d', 6, '>', **(STILL_LOW_STYLE if still_low else {}))}"
         )
     click.echo()
 
