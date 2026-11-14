@@ -20,10 +20,13 @@ from core.storage import (
     NoOldBatteries,
     PastBattery,
     add_meter_reading,
+    known_makes,
     load_battery_history,
     load_room_names,
     mark_battery_replaced,
+    replaced_today,
     save_room_names,
+    set_battery_make,
     update_battery_history,
 )
 
@@ -423,9 +426,17 @@ def _print_battery_summary(battery_devices: list[dict]) -> None:
 
 @click.command("battery-replaced")
 @click.argument("device", shell_complete=_complete_device)
-def battery_replaced_command(device):
+@click.option("--make", help="Make of the new AA batteries. Asked for if not given.")
+@click.option(
+    "--old-make",
+    help="Make of the batteries taken out. Asked for only if it wasn't recorded already.",
+)
+def battery_replaced_command(device, make, old_make):
     """Record that you have replaced the batteries in DEVICE (a serial, or a room
     name, roughly).
+
+    It asks for the make of the new batteries and, if it isn't known, of the
+    old ones. Press Enter to skip either.
 
     If you measured the old batteries, record that first with battery-reading,
     and it moves across with them:
@@ -437,14 +448,74 @@ def battery_replaced_command(device):
     Forgot? Add it afterwards with battery-reading --old-set.
     """
     serial = _resolve_device(device, "Record new batteries in")
-    try:
-        retired = mark_battery_replaced(serial)
-    except KeyError:
+    history = load_battery_history()
+    if serial not in history:
         raise click.ClickException(f"No battery history for {serial}.")
+    if replaced_today(history[serial]):
+        click.echo(f"{serial} was already marked as replaced today; nothing changed.")
+        return
+
+    _echo_known_makes(history, make, old_make)
+    if make is None:
+        make = _ask_make("Make of the new batteries")
+    if old_make is None and not history[serial].get("make"):
+        old_make = _ask_make("Make of the batteries taken out")
+
+    try:
+        retired = mark_battery_replaced(serial, make=make, old_make=old_make)
     except AlreadyReplacedToday:
         click.echo(f"{serial} was already marked as replaced today; nothing changed.")
         return
     click.echo(f"{serial} marked as replaced. {_describe_retired(retired)}")
+
+
+def _echo_known_makes(history: BatteryHistory, make: str | None, old_make: str | None) -> None:
+    """List the makes used before, if a make is about to be asked for."""
+    if make is not None and old_make is not None:
+        return
+    if makes := known_makes(history):
+        click.echo(click.style("Makes recorded so far: ", fg="bright_black") + ", ".join(makes))
+
+
+def _ask_make(question: str) -> str:
+    """Ask for a battery make; a blank answer means not known."""
+    return click.prompt(
+        f"{question} (Enter to skip)", default="", show_default=False, type=str
+    ).strip()
+
+
+@click.command("battery-make")
+@click.argument("device", shell_complete=_complete_device)
+@click.argument("make")
+@click.option(
+    "--old-set",
+    is_flag=True,
+    help="Put the make on the batteries last taken out, not the ones now fitted.",
+)
+def battery_make_command(device, make, old_set):
+    """Record or correct the MAKE of the batteries in DEVICE (a serial, or a room
+    name, roughly).
+
+    battery-replaced asks for the make, so this is for one missed or mistyped:
+
+    \b
+      tado battery-make loo Duracell
+      tado battery-make loo Energizer --old-set
+    """
+    serial = _resolve_device(device, f"Record {make} batteries in")
+    try:
+        saved, replaced = set_battery_make(serial, make, old_set=old_set)
+    except KeyError:
+        raise click.ClickException(f"No battery history for {serial}.")
+    except NoOldBatteries:
+        raise click.ClickException(f"{serial} has no replaced batteries to add a make to.")
+    except ValueError:
+        raise click.BadParameter("can't be blank.", param_hint="MAKE")
+
+    message = f"{serial}: {saved} recorded"
+    if replaced:
+        message += f" for the batteries taken out on {replaced}"
+    click.echo(message + ".")
 
 
 def _describe_retired(retired: PastBattery | None) -> str:
@@ -559,7 +630,8 @@ def _print_lifespans(lifespans: list[tuple[str, PastBattery]], device_zones: dic
         f"{'Went low':<10}  "
         f"{'Replaced':<10}  "
         f"{'Lasted':>6}  "
-        f"{'On low':>6}"
+        f"{'On low':>6}  "
+        "Make"
     )
     click.echo()
     click.echo(click.style(header, fg="bright_white", bold=True))
@@ -573,11 +645,38 @@ def _print_lifespans(lifespans: list[tuple[str, PastBattery]], device_zones: dic
             f"{battery['went_low'] or 'never':<10}  "
             f"{battery['replaced']:<10}  "
             f"{_format_last([battery])}  "
-            f"{_format_on_low(battery)}"
+            f"{_format_on_low(battery)}  "
+            f"{battery.get('make', '')}".rstrip()
         )
 
-    _print_lifespan_averages([battery for _, battery in lifespans])
+    all_batteries = [battery for _, battery in lifespans]
+    _print_lifespan_averages(all_batteries)
     _print_device_averages(rows, zone_width, serial_width)
+    _print_make_averages(all_batteries)
+
+
+def _print_make_averages(all_batteries: list[PastBattery]) -> None:
+    """Print the average lifespan of each make, for makes with a measured set."""
+    by_make: dict[str, list[PastBattery]] = {}
+    for battery in all_batteries:
+        if make := battery.get("make"):
+            by_make.setdefault(make, []).append(battery)
+    averages = [
+        (make, average)
+        for make, batteries in sorted(by_make.items(), key=lambda item: item[0].casefold())
+        if (average := _format_average(batteries)).strip()
+    ]
+    if not averages:
+        return
+
+    make_width = max(len("Make"), *(len(make) for make, _ in averages))
+    header = f"  {'Make':<{make_width}}  {'Average':>8}"
+    click.echo(click.style("  Average by make", fg="bright_white", bold=True))
+    click.echo(click.style(header, fg="bright_white", bold=True))
+    click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
+    for make, average in averages:
+        click.echo(f"  {make:<{make_width}}  {average}")
+    click.echo()
 
 
 def _print_device_averages(

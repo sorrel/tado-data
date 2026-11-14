@@ -18,6 +18,7 @@ from core.storage import (
     add_meter_reading,
     load_battery_history,
     mark_battery_replaced,
+    set_battery_make,
     update_battery_history,
 )
 
@@ -667,3 +668,71 @@ def test_replacing_a_battery_still_low_closes_its_spell(frozen_today, history_fi
     assert retired["low_periods"] == [
         {"from": "2026-08-20", "to": "2026-08-25", "seen": "2026-08-24"}
     ]
+
+
+# --- battery makes ----------------------------------------------------------
+
+
+def test_the_make_survives_a_daily_update(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None, "make": "Ikea"}})
+
+    history = update_battery_history({SERIAL: "LOW"})
+
+    assert history[SERIAL]["make"] == "Ikea"
+    assert load_battery_history()[SERIAL]["make"] == "Ikea"
+
+
+def test_replacing_moves_the_make_to_the_old_set_and_records_the_new_one(
+    frozen_today, history_file
+):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None, "make": "Ikea"}})
+
+    retired = mark_battery_replaced(SERIAL, make="Duracell", old_make="ignored")
+
+    assert retired is not None and retired["make"] == "Ikea"  # the recorded make wins
+    assert load_battery_history()[SERIAL]["make"] == "Duracell"
+
+
+def test_a_make_already_recorded_keeps_its_spelling(frozen_today, history_file):
+    _write(
+        history_file,
+        {
+            SERIAL: {"good_since": "2026-05-01", "low_since": None, "make": "Duracell"},
+            "VA2": {"good_since": "2026-05-01", "low_since": None},
+        },
+    )
+
+    mark_battery_replaced("VA2", make="  duracell ", old_make="ENERGIZER  max")
+
+    entry = load_battery_history()["VA2"]
+    assert entry["make"] == "Duracell"
+    assert entry["past_batteries"][0]["make"] == "ENERGIZER max"
+
+
+def test_a_blank_make_is_not_saved(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
+
+    retired = mark_battery_replaced(SERIAL, make="  ", old_make="")
+
+    assert retired is not None and "make" not in retired
+    assert "make" not in load_battery_history()[SERIAL]
+
+
+def test_setting_the_make_keeps_everything_else(frozen_today, history_file):
+    reading = {"date": "2026-08-24", "percent": [50, 50]}
+    _write(
+        history_file,
+        {SERIAL: {"good_since": "2026-05-01", "low_since": None, "meter_readings": [reading]}},
+    )
+
+    assert set_battery_make(SERIAL, "Ikea") == ("Ikea", None)
+
+    entry = load_battery_history()[SERIAL]
+    assert entry["make"] == "Ikea" and entry["meter_readings"] == [reading]
+
+
+def test_a_blank_make_cannot_be_set(frozen_today, history_file):
+    _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
+
+    with pytest.raises(ValueError):
+        set_battery_make(SERIAL, " ")

@@ -8,6 +8,7 @@ import click
 from commands.battery import (
     battery_command,
     battery_history_command,
+    battery_make_command,
     battery_reading_command,
     battery_replaced_command,
 )
@@ -31,6 +32,7 @@ cli.add_command(battery_command)
 cli.add_command(battery_history_command)
 cli.add_command(battery_replaced_command)
 cli.add_command(battery_reading_command)
+cli.add_command(battery_make_command)
 cli.add_command(zones_command)
 cli.add_command(heat_check_command)
 
