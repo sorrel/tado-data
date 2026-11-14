@@ -80,7 +80,7 @@ What follows from this:
 - A saved lifespan is the time to the **first low warning**, not the total life of the batteries. `On low` in `battery-history` is what shows how much further they went.
 - `LOW` going back to `NORMAL` is **not** evidence of a replacement, because the same batteries may have gone back in. The code must never infer a replacement; only `battery-replaced` records one.
 - Do not run `battery` while batteries are out of a low device: it will look offline and be recorded as having died.
-- The same valve went back to `NORMAL` once the batteries were refitted, so each spell of `LOW` is kept in `low_periods` (`from`, `to`; `to` is null while still low). `low_since` stays as the first warning. `battery` shows the first, the latest and how many (for the batteries now fitted, in red only while still low), and `battery-history` lists them all.
+- The same valve went back to `NORMAL` once the batteries were refitted, so each spell of `LOW` is kept in `low_periods` (`from`, `to`; `to` is null while still low; `seen` is the last day `battery` saw it LOW, absent on spells saved before 14 November 2026, which fall back to `from`). `low_since` stays as the first warning. `battery` shows **First low** (the first day ever seen low), **Latest low** (the latest spell's `seen`, so the most recent day seen low) and how many spells (for the batteries now fitted, in red only while still low). `battery-history` lists every spell with when it went low, its last day seen low and when it was normal again, so the start of a later spell is still visible there. `seen` moves only when `battery` runs, not with the heat check.
 
 ### Known Issue: Battery Status Says Nothing About Whether the Valve Works
 
