@@ -26,7 +26,8 @@ TRACKING_STARTED = "2026-04-17"
 # Dates are ISO strings (YYYY-MM-DD), as saved in the file.
 
 # One spell of LOW. "from" is a keyword, so this needs the functional form.
-LowPeriod = TypedDict("LowPeriod", {"from": str, "to": str | None})  # to: None while still low
+# to: None while still low. seen: the last day it was seen LOW (absent on older spells).
+LowPeriod = TypedDict("LowPeriod", {"from": str, "to": str | None, "seen": NotRequired[str]})
 
 
 class MeterReading(TypedDict):
@@ -300,6 +301,8 @@ def _updated_entry(entry: DeviceHistory, state: str, offline: bool, today: str) 
         new_low = prev_low or (None if prev_good == today else today)
         if new_low and (not periods or periods[-1]["to"] is not None):
             periods.append({"from": today, "to": None})
+        if new_low and periods:
+            periods[-1]["seen"] = today
         if offline:
             new_died = entry.get("died") or today
 

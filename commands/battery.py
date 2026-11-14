@@ -69,10 +69,11 @@ def _format_last(past_batteries: Sequence[Lifespan]) -> str:
 
 
 def _format_lows(periods: list[LowPeriod], is_low: bool) -> str:
-    """Format the first low warning, the latest and how many; red only while still low."""
+    """Format the first day seen low, the most recent and how many spells; red only while low."""
     if not periods:
         return " " * 28
-    text = f"{periods[0]['from']:<10}  {periods[-1]['from']:<10}  {len(periods):>4}"
+    latest = periods[-1].get("seen") or periods[-1]["from"]
+    text = f"{periods[0]['from']:<10}  {latest:<10}  {len(periods):>4}"
     return click.style(text, fg="red") if is_low else text
 
 
@@ -641,6 +642,7 @@ def _print_low_periods(lows: list[tuple[str, LowPeriod]], device_zones: dict) ->
         f"  {'Zone':<{zone_width}}  "
         f"{'Serial':<{serial_width}}  "
         f"{'Went low':<10}  "
+        f"{'Last low':<10}  "
         f"{'Normal again':<12}  "
         f"{'Days':>6}"
     )
@@ -655,6 +657,7 @@ def _print_low_periods(lows: list[tuple[str, LowPeriod]], device_zones: dict) ->
             f"  {zone:<{zone_width}}  "
             f"{serial:<{serial_width}}  "
             f"{period['from']:<10}  "
+            f"{period.get('seen') or period['from']:<10}  "
             f"{period['to'] or 'still low':<12}  "
             f"{days:>5}d"
         )

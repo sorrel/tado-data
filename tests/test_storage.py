@@ -321,12 +321,26 @@ def test_low_reading_on_the_day_of_fitting_is_ignored(frozen_today, history_file
 # --- the record of low spells ----------------------------------------------
 
 
+def test_going_back_to_normal_keeps_the_last_day_seen_low(frozen_today, history_file):
+    spell = {"from": "2026-08-20", "to": None, "seen": "2026-08-23"}
+    _write(
+        history_file,
+        {SERIAL: {"good_since": "2026-05-01", "low_since": "2026-08-20", "low_periods": [spell]}},
+    )
+
+    history = update_battery_history({SERIAL: "NORMAL"})
+
+    assert history[SERIAL]["low_periods"] == [{**spell, "to": "2026-08-25"}]
+
+
 def test_going_low_opens_a_low_spell(frozen_today, history_file):
     _write(history_file, {SERIAL: {"good_since": "2026-05-01", "low_since": None}})
 
     history = update_battery_history({SERIAL: "LOW"})
 
-    assert history[SERIAL]["low_periods"] == [{"from": "2026-08-25", "to": None}]
+    assert history[SERIAL]["low_periods"] == [
+        {"from": "2026-08-25", "to": None, "seen": "2026-08-25"}
+    ]
 
 
 def test_staying_low_keeps_one_spell(frozen_today, history_file):
@@ -338,7 +352,7 @@ def test_staying_low_keeps_one_spell(frozen_today, history_file):
 
     history = update_battery_history({SERIAL: "LOW"})
 
-    assert history[SERIAL]["low_periods"] == [spell]
+    assert history[SERIAL]["low_periods"] == [{**spell, "seen": "2026-08-25"}]
 
 
 def test_going_back_to_normal_closes_the_spell(frozen_today, history_file):
@@ -375,7 +389,10 @@ def test_going_low_again_adds_a_second_spell(frozen_today, history_file):
 
     history = update_battery_history({SERIAL: "LOW"})
 
-    assert history[SERIAL]["low_periods"] == [first, {"from": "2026-08-25", "to": None}]
+    assert history[SERIAL]["low_periods"] == [
+        first,
+        {"from": "2026-08-25", "to": None, "seen": "2026-08-25"},
+    ]
     assert history[SERIAL]["low_since"] == "2026-08-20"  # still the first warning
 
 

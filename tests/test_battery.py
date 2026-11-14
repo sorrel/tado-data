@@ -170,13 +170,24 @@ def test_report_shows_the_last_lifespan_after_a_replacement(
 # --- first low, latest low and how many -------------------------------------
 
 
-TWO_SPELLS = [{"from": "2026-08-20", "to": "2026-08-21"}, {"from": "2026-08-24", "to": None}]
+TWO_SPELLS = [
+    {"from": "2026-08-20", "to": "2026-08-21", "seen": "2026-08-20"},
+    {"from": "2026-08-24", "to": None, "seen": "2026-08-25"},
+]
 
 
-def test_format_lows_shows_first_latest_and_count():
+def test_format_lows_shows_first_day_low_latest_day_low_and_count():
     assert (
         click.unstyle(battery_mod._format_lows(TWO_SPELLS, is_low=True))
-        == "2026-08-20  2026-08-24     2"
+        == "2026-08-20  2026-08-25     2"
+    )
+
+
+def test_format_lows_falls_back_to_the_start_of_a_spell_saved_without_seen():
+    spells = [{"from": "2026-08-20", "to": None}]
+
+    assert click.unstyle(battery_mod._format_lows(spells, is_low=True)).startswith(
+        "2026-08-20  2026-08-20"
     )
 
 
@@ -945,3 +956,17 @@ def test_help_explains_how_to_record_the_old_batteries_reading():
     assert "before battery-replaced" in reading_help
     assert "tado battery-reading loo 50 50 --note" in replaced_help
     assert "--old-set" in replaced_help
+
+
+def test_low_warnings_list_shows_when_each_spell_started_and_last_day_seen_low(capsys):
+    spells = [
+        ("VA0000000001", {"from": "2026-08-20", "to": "2026-08-22", "seen": "2026-08-21"}),
+        ("VA0000000001", {"from": "2026-08-24", "to": None}),
+    ]
+
+    battery_mod._print_low_periods(spells, {"VA0000000001": "Hall"})
+
+    lines = click.unstyle(capsys.readouterr().out).splitlines()
+    assert "Last low" in lines[1]
+    assert "2026-08-20  2026-08-21  2026-08-22" in lines[3]
+    assert "2026-08-24  2026-08-24  still low" in lines[4]
