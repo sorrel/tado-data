@@ -647,3 +647,23 @@ def test_an_old_set_reading_is_refused_with_nothing_taken_out(frozen_today, hist
     with pytest.raises(NoOldBatteries):
         add_meter_reading(SERIAL, [50], old_set=True)
     assert "meter_readings" not in history_file.read_text()
+
+
+def test_replacing_a_battery_still_low_closes_its_spell(frozen_today, history_file):
+    _write(
+        history_file,
+        {
+            SERIAL: {
+                "good_since": "2026-05-01",
+                "low_since": "2026-08-20",
+                "low_periods": [{"from": "2026-08-20", "to": None, "seen": "2026-08-24"}],
+            }
+        },
+    )
+
+    retired = mark_battery_replaced(SERIAL)
+
+    assert retired is not None
+    assert retired["low_periods"] == [
+        {"from": "2026-08-20", "to": "2026-08-25", "seen": "2026-08-24"}
+    ]
