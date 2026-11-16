@@ -16,6 +16,11 @@ HEAT_STATE_FILE = os.path.join(STORED_DATA_DIR, "heat_check.json")
 
 
 def _day_report_path(day: date, zone_id: int) -> str:
+    # The zone id comes from Tado's reply and goes into the file name, so
+    # refuse anything but a whole number: a string such as "../x" would
+    # otherwise write outside stored_data/.
+    if type(zone_id) is not int:  # not isinstance: True is an int too
+        raise ValueError(f"Tado gave a zone id that isn't a whole number: {zone_id!r}")
     return os.path.join(DAY_REPORTS_DIR, day.isoformat(), f"{zone_id}.json")
 
 
