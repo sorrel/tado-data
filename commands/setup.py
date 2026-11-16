@@ -3,15 +3,21 @@ Setup and authentication commands.
 """
 
 import textwrap
+from typing import Any
 
 import click
 
 from core.auth import clear_tokens, device_code_flow, load_tokens
 from core.client import TadoClient
+from core.spacing import spaced_output
 
 
 class ColouredGroup(click.Group):
-    """Click group with coloured command listing."""
+    """Click group with coloured command listing, and a blank line around every command."""
+
+    def main(self, *args: Any, **kwargs: Any) -> Any:
+        with spaced_output():
+            return super().main(*args, **kwargs)
 
     def format_commands(self, ctx, formatter):
         commands = []
