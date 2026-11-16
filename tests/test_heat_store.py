@@ -18,6 +18,17 @@ def test_day_report_round_trip(heat_store_dir):
     assert (heat_store_dir / "day_reports" / "2026-11-10" / "12.json").exists()
 
 
+@pytest.mark.parametrize("zone_id", ["../../escaped", "12/../13", "", True, 1.5])
+def test_zone_id_that_is_not_a_whole_number_is_refused(heat_store_dir, zone_id):
+    # The zone id comes from Tado's reply and becomes part of a file path,
+    # so anything but a whole number must never reach the disc.
+    with pytest.raises(ValueError):
+        save_day_report(DAY, zone_id, {"zoneType": "HEATING"})
+    with pytest.raises(ValueError):
+        load_day_report(DAY, zone_id)
+    assert not (heat_store_dir.parent / "escaped.json").exists()
+
+
 def test_missing_day_report_is_none(heat_store_dir):
     assert load_day_report(DAY, 12) is None
 
