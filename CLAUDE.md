@@ -146,6 +146,7 @@ a checked day costs about 19.
 - `core/auth.py` — OAuth2 device code flow and token management
 - `core/client.py` — TadoClient class for API requests
 - `commands/setup.py` — auth, logout, status commands + ColouredGroup
+- `core/spacing.py` — the blank line before and after every command's output (terminal only); `ColouredGroup.main` wraps each run in it, so commands needn't add their own
 - `commands/battery.py` — Battery reporting command
 - `commands/heat_check.py` — heat-check command and its scheduled run
 - `core/heat_detect.py` — finds warming and offline faults in a day report (pure)
