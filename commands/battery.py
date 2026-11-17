@@ -145,10 +145,11 @@ def _format_on_low(battery: PastBattery) -> str:
 
 def _get_device_zone_map(client: TadoClient) -> dict:
     """Build a mapping of device serial number to zone name."""
-    zones = client.get_zones()
-    if not zones:
-        return {}
+    return device_rooms(client.get_zones() or [])
 
+
+def device_rooms(zones: list[dict]) -> dict[str, str]:
+    """Map each device's serial to its zone's name, and remember the map."""
     device_zones = {}
     for zone in zones:
         zone_name = zone.get("name", "Unknown")
@@ -302,18 +303,18 @@ def battery_command(room):
         click.echo("No devices found.")
         return
 
-    battery_devices = _battery_devices(devices, _get_device_zone_map(client), room)
+    battery_devices = battery_rows(devices, _get_device_zone_map(client), room)
     if not battery_devices:
         click.echo("No battery-powered devices found.")
         return
 
-    _add_history(battery_devices)
+    record_battery_states(battery_devices)
     battery_devices.sort(key=lambda d: (d["zone"], d["type"], d["name"]))
     _print_battery_table(battery_devices)
     _print_battery_summary(battery_devices)
 
 
-def _battery_devices(devices: list[dict], device_zones: dict, room: str | None) -> list[dict]:
+def battery_rows(devices: list[dict], device_zones: dict, room: str | None) -> list[dict]:
     """The devices that report a battery state, in ROOM if given, as report rows."""
     rows = []
     for device in devices:
@@ -339,8 +340,8 @@ def _battery_devices(devices: list[dict], device_zones: dict, room: str | None) 
     return rows
 
 
-def _add_history(battery_devices: list[dict]) -> None:
-    """Save today's states to the history, and add each device's dates to its row."""
+def record_battery_states(battery_devices: list[dict]) -> BatteryHistory:
+    """Save today's states to the history, add each device's dates to its row, return it."""
     on_battery = [d for d in battery_devices if not d["mains"]]
     current_states = {d["serial"]: d["battery"] for d in on_battery}
     disconnected = {d["serial"] for d in on_battery if not d["connection"]}
@@ -352,6 +353,7 @@ def _add_history(battery_devices: list[dict]) -> None:
         d["low_periods"] = entry.get("low_periods", [])
         d["past_batteries"] = entry.get("past_batteries", [])
         d["make"] = entry.get("make", "")
+    return history
 
 
 def _print_battery_table(battery_devices: list[dict]) -> None:
@@ -805,12 +807,13 @@ def _print_low_periods(lows: list[tuple[str, LowPeriod]], device_zones: dict) ->
         end = date.fromisoformat(period["to"]) if period["to"] else date.today()
         days = (end - date.fromisoformat(period["from"])).days
         still_low = period["to"] is None
+        end_style = STILL_LOW_STYLE if still_low else GOOD_STYLE
         click.echo(
             f"  {_cell(zone, zone_width, **ZONE_STYLE)}  "
             f"{_cell(serial, serial_width, **SERIAL_STYLE)}  "
             f"{_cell(period['from'], 10, **LOW_STYLE)}  "
             f"{_cell(period.get('seen') or period['from'], 10, **LOW_STYLE)}  "
-            f"{_cell(period['to'] or 'still low', 12, **(STILL_LOW_STYLE if still_low else GOOD_STYLE))}  "
+            f"{_cell(period['to'] or 'still low', 12, **end_style)}  "
             f"{_cell(f'{days}d', 6, '>', **(STILL_LOW_STYLE if still_low else {}))}"
         )
     click.echo()

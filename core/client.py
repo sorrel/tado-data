@@ -125,9 +125,9 @@ class TadoClient:
 
         return resp.json()
 
-    def get_devices(self) -> list[dict] | None:
-        """Fetch all devices in the home."""
-        return self._request("GET", f"/homes/{self.home_id}/devices")
+    def get_devices(self, strict: bool = False) -> list[dict] | None:
+        """Fetch all devices in the home. Raises TadoAPIError if strict."""
+        return self._request("GET", f"/homes/{self.home_id}/devices", strict=strict)
 
     def get_zones(self, strict: bool = False) -> list[dict] | None:
         """Get all zones/rooms with their devices. Raises TadoAPIError if strict."""

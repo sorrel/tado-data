@@ -38,9 +38,9 @@ launchctl bootstrap "gui/$(id -u)" "$PLIST"
 # a missing permission shows up today rather than at the first fault.
 osascript -e 'display notification "Installed. You will only hear from it when something is wrong." with title "Tado heat check"'
 
-echo "Installed: the heat check will run at 07:00 each day, with later runs"
-echo "catching up if the Mac was off. Later runs make no Tado requests once"
-echo "the day is checked."
+echo "Installed: the heat check and battery check will run at 07:00 each day,"
+echo "with later runs catching up if the Mac was off. Later runs make no Tado"
+echo "requests once the day and the batteries are checked."
 echo
 echo "A test notification has just been sent. If you didn't see it, allow"
 echo "notifications for Script Editor in System Settings → Notifications."
