@@ -42,13 +42,21 @@ def save_day_report(day: date, zone_id: int, report: dict) -> None:
 
 def load_state() -> dict:
     """
-    {"last_checked": "YYYY-MM-DD" | None, "faults": {"<zone_id>:<kind>": {...}}}.
+    {"last_checked": "YYYY-MM-DD" | None, "faults": {"<zone_id>:<kind>": {...}},
+     "battery_checked": "YYYY-MM-DD" | None}.
+
+    battery_checked is the last day the batteries were checked (today, not
+    yesterday: battery state is a reading of now, not a day report).
 
     Raises BatteryHistoryError if the file is damaged, so it's never replaced
     by an empty state.
     """
     state = _load_json(HEAT_STATE_FILE)
-    return {"last_checked": state.get("last_checked"), "faults": state.get("faults", {})}
+    return {
+        "last_checked": state.get("last_checked"),
+        "faults": state.get("faults", {}),
+        "battery_checked": state.get("battery_checked"),
+    }
 
 
 def save_state(state: dict) -> None:

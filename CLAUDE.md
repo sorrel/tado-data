@@ -81,8 +81,8 @@ What follows from this:
 
 - A saved lifespan is the time to the **first low warning**, not the total life of the batteries. `On low` in `battery-history` is what shows how much further they went.
 - `LOW` going back to `NORMAL` is **not** evidence of a replacement, because the same batteries may have gone back in. The code must never infer a replacement; only `battery-replaced` records one.
-- Do not run `battery` while batteries are out of a low device: it will look offline and be recorded as having died.
-- The same valve went back to `NORMAL` once the batteries were refitted, so each spell of `LOW` is kept in `low_periods` (`from`, `to`; `to` is null while still low; `seen` is the last day `battery` saw it LOW, absent on spells saved before 14 November 2026, which fall back to `from`). `low_since` stays as the first warning. `battery` shows **First low** (the first day ever seen low), **Latest low** (the latest spell's `seen`, so the most recent day seen low) and how many spells (for the batteries now fitted, in red only while still low). `battery-history` lists every spell with when it went low, its last day seen low and when it was normal again, so the start of a later spell is still visible there. `seen` moves only when `battery` runs, not with the heat check.
+- Do not run `battery` while batteries are out of a low device: it will look offline and be recorded as having died. The scheduled battery check (every three hours from 07:00 until it has run that day) can do the same, so refit them promptly; coming back online clears it and notifies.
+- The same valve went back to `NORMAL` once the batteries were refitted, so each spell of `LOW` is kept in `low_periods` (`from`, `to`; `to` is null while still low; `seen` is the last day `battery` saw it LOW, absent on spells saved before 14 November 2026, which fall back to `from`). `low_since` stays as the first warning. `battery` shows **First low** (the first day ever seen low), **Latest low** (the latest spell's `seen`, so the most recent day seen low) and how many spells (for the batteries now fitted, in red only while still low). `battery-history` lists every spell with when it went low, its last day seen low and when it was normal again, so the start of a later spell is still visible there. `seen` moves when `battery` runs and with the scheduled daily battery check (see Heat Check), not with the day reports.
 
 ### Known Issue: Battery Status Says Nothing About Whether the Valve Works
 
@@ -108,7 +108,7 @@ today's report is never fetched or saved.
 
 `heat-check --scheduled` runs from launchd at 07:00, and again at 10:00,
 13:00, 16:00, 19:00 and 22:00 so a Mac switched on late still gets checked;
-once a day is checked, later runs make no requests (install with
+once the day and the batteries are checked, later runs make no requests (install with
 `tools/install-heat-check.sh`, which sends a test notification; log in
 `~/Library/Logs/tado-heat-check.log`). It deliberately doesn't run at login,
 when the network may not be up yet.
@@ -122,6 +122,13 @@ all (Mac off all day, or `uv` moved), and the log shows when it last ran.
 Notifications may need allowing under Script Editor in System Settings →
 Notifications. The account has Auto-Assist, so about 20,000 requests a day;
 a checked day costs about 19.
+
+The same scheduled run also checks the batteries once a day (`battery_checked`
+in `heat_check.json`; 1 `/devices` request plus the zone list). It saves what it
+sees to the battery history exactly as `battery` does, and notifies only a
+change (`core/battery_alerts.py`): a device going LOW, back to NORMAL, offline
+while LOW (died) or back online. Another day on LOW is not a change. A failed
+battery check leaves `battery_checked` alone, so a later run that day retries.
 
 ### Zone Control & Heating Circuits
 
@@ -151,6 +158,7 @@ a checked day costs about 19.
 - `commands/heat_check.py` — heat-check command and its scheduled run
 - `core/heat_detect.py` — finds warming and offline faults in a day report (pure)
 - `core/heat_alerts.py` — decides which faults to notify: new, weekly, cleared (pure)
+- `core/battery_alerts.py` — decides which battery changes the scheduled run notifies (pure)
 - `core/heat_store.py` — saved day reports and heat-check state in `stored_data/`
 - `core/notify.py` — macOS notifications through `osascript`
 - `tools/heat-check.plist.template`, `tools/install-heat-check.sh` — the 07:00 launchd schedule

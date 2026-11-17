@@ -5,19 +5,25 @@ Run by hand it reports one day. With --scheduled (from launchd each morning)
 it checks every day since the last check, and notifies on this Mac only when
 there is something to say: a new fault, a known one once a week, a cleared
 one, or the check itself failing. It never prompts for a login.
+
+The scheduled run also checks the batteries once a day, saving what it sees
+to the battery history as `tado battery` does, and notifies only a change:
+a device going LOW, back to NORMAL, offline while LOW, or back online.
 """
 
 from datetime import date, datetime, timedelta
 
 import click
 
+from commands.battery import battery_rows, device_rooms, record_battery_states
 from core.auth import AuthError, AuthNetworkError, LoginNeeded, TokenLockBusy
+from core.battery_alerts import battery_changes
 from core.client import RateLimited, TadoAPIError, TadoClient
 from core.heat_alerts import update_faults
 from core.heat_detect import LONDON, Finding, Offline, Warming, find_problems
 from core.heat_store import load_day_report, load_state, save_day_report, save_state
 from core.notify import NotifyError, notify
-from core.storage import BatteryHistoryError
+from core.storage import BatteryHistoryError, load_battery_history
 
 TITLE = "Tado heat check"
 MAX_CATCH_UP = 7
@@ -118,25 +124,43 @@ def _send(message: str) -> bool:
         return False
 
 
+def _connect() -> TadoClient:
+    client = TadoClient()
+    if not client.connect(interactive=False):
+        raise HomeNotFound("no home ID")
+    return client
+
+
 def _scheduled_check(today: date, lines: list[str]) -> None:
-    """Check every due day, saving state after each; notify lines are added to `lines`."""
+    """Check every due day and the batteries, saving state after each; adds to `lines`."""
     state = load_state()
     last = date.fromisoformat(state["last_checked"]) if state["last_checked"] else None
     days, skipped = days_to_check(today, last)
     for day in skipped:
         _log(f"{day}: not checked, more than {MAX_CATCH_UP} days ago")
-    if not days:
+    battery_due = state["battery_checked"] != today.isoformat()
+    if not days and not battery_due:
         _log("Nothing to check.")
         return
 
-    client = TadoClient()
-    if not client.connect(interactive=False):
-        raise HomeNotFound("no home ID")
+    client = _connect()
     zones = client.get_zones(strict=True) or []  # strict: a failure raises rather than None
+    if days:
+        state = _check_days(client, days, zones, state, lines)
+    if battery_due:
+        lines.extend(_check_batteries(client, zones))
+        state = {**state, "battery_checked": today.isoformat()}
+        save_state(state)
+
+    if client.rate_limit:
+        _log(f"Rate limit: {client.rate_limit}")
+
+
+def _check_days(client, days: list[date], zones: list[dict], state: dict, lines: list[str]) -> dict:
+    """Check each day in turn, saving state after each. Returns the new state."""
     names = _names(zones)
     if not names:
         raise NoHeatingZones("no heating zones")
-
     for day in days:
         found = check_day(client, day, zones)
         current = {}
@@ -147,12 +171,30 @@ def _scheduled_check(today: date, lines: list[str]) -> None:
         if not current:
             _log(f"{day}: no problems")
         faults, new_lines = update_faults(state["faults"], day, current)
-        state = {"last_checked": day.isoformat(), "faults": faults}
+        state = {**state, "last_checked": day.isoformat(), "faults": faults}
         save_state(state)
         lines.extend(new_lines)
+    return state
 
-    if client.rate_limit:
-        _log(f"Rate limit: {client.rate_limit}")
+
+def _device_label(row: dict) -> str:
+    kind = "valve" if row["type"].startswith("VA") else "thermostat"
+    return f"{row['zone']} {kind}"
+
+
+def _check_batteries(client, zones: list[dict]) -> list[str]:
+    """Save today's battery states to the history; the changes to notify."""
+    rows = battery_rows(client.get_devices(strict=True) or [], device_rooms(zones), None)
+    before = load_battery_history()
+    after = record_battery_states(rows)
+    for row in rows:
+        if not row["mains"]:
+            online = "online" if row["connection"] else "offline"
+            _log(f"Battery: {_device_label(row)} {row['serial']} {row['battery']}, {online}")
+    changes = battery_changes(before, after, {row["serial"]: _device_label(row) for row in rows})
+    if not changes:
+        _log("Batteries: no change")
+    return changes
 
 
 def _run_scheduled(today: date) -> int:

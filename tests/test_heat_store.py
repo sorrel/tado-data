@@ -34,12 +34,16 @@ def test_missing_day_report_is_none(heat_store_dir):
 
 
 def test_state_defaults_when_absent(heat_store_dir):
-    assert load_state() == {"last_checked": None, "faults": {}}
+    assert load_state() == {"last_checked": None, "faults": {}, "battery_checked": None}
 
 
 def test_state_round_trip_keeps_backup(heat_store_dir):
     save_state({"last_checked": "2026-11-09", "faults": {}})
-    state = {"last_checked": "2026-11-10", "faults": {"12:offline": {"zone": "Downstairs Loo"}}}
+    state = {
+        "last_checked": "2026-11-10",
+        "faults": {"12:offline": {"zone": "Downstairs Loo"}},
+        "battery_checked": "2026-11-11",
+    }
     save_state(state)
     assert load_state() == state
     assert (heat_store_dir / "heat_check.json.bak").exists()

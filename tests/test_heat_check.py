@@ -16,17 +16,36 @@ from click.testing import CliRunner
 
 import commands.heat_check as hc
 import core.notify as notify_mod
+import core.storage as storage_mod
 from core.auth import LoginNeeded
 from core.client import RateLimited
 from core.heat_detect import Offline, Warming
 from core.heat_store import load_day_report, load_state, save_state
+from core.storage import load_battery_history
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "dayreport_fault.json").read_text())
 FAULT_DAY = date(2026, 11, 10)
 ZONES = [
-    {"id": 12, "name": "Downstairs Loo", "type": "HEATING"},
+    {"id": 12, "name": "Downstairs Loo", "type": "HEATING", "devices": [{"serialNo": "VA1"}]},
     {"id": 0, "name": "Hot Water", "type": "HOT_WATER"},
-    {"id": 3, "name": "Hall", "type": "HEATING"},
+    {"id": 3, "name": "Hall", "type": "HEATING", "devices": [{"serialNo": "RU1"}]},
+]
+
+
+def device(serial, kind, battery="NORMAL", online=True):
+    return {
+        "serialNo": serial,
+        "shortSerialNo": serial,
+        "deviceType": kind,
+        "batteryState": battery,
+        "connectionState": {"value": online},
+    }
+
+
+ALL_NORMAL = [
+    device("VA1", "VA02"),
+    device("RU1", "RU02"),
+    {"serialNo": "GW1", "deviceType": "GW03"},
 ]
 
 
@@ -55,6 +74,7 @@ class FakeHeatClient:
     """Stands in for TadoClient. `reports(zone_id, day)` decides each day report."""
 
     reports = staticmethod(fault_day_only)
+    devices: ClassVar[list] = ALL_NORMAL
     connect_error = None
     fail_on_day = None
     instances: ClassVar[list] = []
@@ -64,6 +84,7 @@ class FakeHeatClient:
         self.rate_limit = "RateLimit-Remaining=19000"
         self.interactive = None
         self.report_calls = []
+        self.device_calls = 0
         FakeHeatClient.instances.append(self)
 
     def connect(self, interactive=True):
@@ -74,6 +95,10 @@ class FakeHeatClient:
 
     def get_zones(self, strict=False):
         return ZONES
+
+    def get_devices(self, strict=False):
+        self.device_calls += 1
+        return self.devices
 
     def get_day_report(self, zone_id, day):
         self.report_calls.append((zone_id, day))
@@ -90,8 +115,9 @@ def sent(monkeypatch):
 
 
 @pytest.fixture
-def fake(monkeypatch, heat_store_dir):
+def fake(monkeypatch, heat_store_dir, history_file):
     FakeHeatClient.instances = []
+    monkeypatch.setattr(FakeHeatClient, "devices", ALL_NORMAL)
     monkeypatch.setattr(FakeHeatClient, "reports", staticmethod(fault_day_only))
     monkeypatch.setattr(FakeHeatClient, "connect_error", None)
     monkeypatch.setattr(FakeHeatClient, "fail_on_day", None)
@@ -108,6 +134,7 @@ def on(monkeypatch, today):
             return today
 
     monkeypatch.setattr(hc, "date", Today)
+    monkeypatch.setattr(storage_mod, "date", Today)  # the battery history's dates
 
 
 def run(*args):
@@ -179,7 +206,7 @@ def test_manual_run_prints_findings_and_never_notifies(monkeypatch, fake, sent):
     )
     assert "offline from 19:35" in result.output
     assert sent == []
-    assert load_state() == {"last_checked": None, "faults": {}}
+    assert load_state() == {"last_checked": None, "faults": {}, "battery_checked": None}
 
 
 def test_manual_run_clean_day(monkeypatch, fake, sent):
@@ -361,3 +388,80 @@ def test_scheduled_with_no_heating_zones_is_a_failure(monkeypatch, fake, sent):
     assert result.exit_code == 1
     assert sent == [("Tado heat check", "Heat check didn't run: Tado listed no heating zones.")]
     assert load_state()["last_checked"] is None
+
+
+# --- the daily battery check ----------------------------------------------------
+
+
+def device_calls():
+    return sum(client.device_calls for client in FakeHeatClient.instances)
+
+
+def battery_run(monkeypatch, today, devices):
+    """A scheduled run on TODAY with every day report clean, so only batteries notify."""
+    monkeypatch.setattr(FakeHeatClient, "reports", staticmethod(lambda zone_id, day: {}))
+    monkeypatch.setattr(FakeHeatClient, "devices", devices)
+    on(monkeypatch, today)
+    return run("--scheduled")
+
+
+def test_scheduled_records_battery_states(monkeypatch, fake, sent):
+    result = battery_run(monkeypatch, date(2026, 11, 10), ALL_NORMAL)
+    assert result.exit_code == 0, result.output
+    history = load_battery_history()
+    assert set(history) == {"VA1", "RU1"}  # the gateway has no battery
+    assert history["VA1"]["good_since"] == "2026-11-10"
+    assert load_state()["battery_checked"] == "2026-11-10"
+    assert sent == []
+
+
+def test_batteries_are_checked_once_a_day(monkeypatch, fake, sent):
+    battery_run(monkeypatch, date(2026, 11, 10), ALL_NORMAL)
+    battery_run(monkeypatch, date(2026, 11, 10), ALL_NORMAL)
+    assert device_calls() == 1
+    battery_run(monkeypatch, date(2026, 11, 11), ALL_NORMAL)
+    assert device_calls() == 2
+
+
+def test_batteries_checked_when_the_days_are_up_to_date(monkeypatch, fake, sent):
+    save_state({"last_checked": "2026-11-09", "faults": {}})
+    battery_run(monkeypatch, date(2026, 11, 10), ALL_NORMAL)
+    assert report_calls() == 0
+    assert device_calls() == 1
+
+
+def test_going_low_notifies_once(monkeypatch, fake, sent):
+    low = [device("VA1", "VA02", "LOW"), device("RU1", "RU02")]
+    save_state({"last_checked": "2026-11-09", "faults": {}})
+    battery_run(monkeypatch, date(2026, 11, 10), ALL_NORMAL)
+    battery_run(monkeypatch, date(2026, 11, 11), low)
+    battery_run(monkeypatch, date(2026, 11, 12), low)
+    assert [message for _, message in sent] == ["Downstairs Loo valve batteries are low"]
+    assert load_battery_history()["VA1"]["low_periods"][-1]["seen"] == "2026-11-12"
+
+
+def test_back_to_normal_and_dying_notify(monkeypatch, fake, sent):
+    low = [device("VA1", "VA02", "LOW"), device("RU1", "RU02")]
+    dead = [device("VA1", "VA02", "LOW", online=False), device("RU1", "RU02")]
+    save_state({"last_checked": "2026-11-09", "faults": {}})
+    battery_run(monkeypatch, date(2026, 11, 10), low)
+    battery_run(monkeypatch, date(2026, 11, 11), dead)
+    battery_run(monkeypatch, date(2026, 11, 12), low)
+    battery_run(monkeypatch, date(2026, 11, 13), ALL_NORMAL)
+    assert [message for _, message in sent] == [
+        "Downstairs Loo valve batteries are low",
+        "Downstairs Loo valve has gone offline with low batteries",
+        "Downstairs Loo valve is back online",
+        "Downstairs Loo valve batteries are back to normal",
+    ]
+
+
+def test_battery_check_failure_is_retried_later_that_day(monkeypatch, fake, sent):
+    def broken(self, strict=False):
+        raise RateLimited("Tado returned 429", status=429)
+
+    monkeypatch.setattr(FakeHeatClient, "get_devices", broken)
+    save_state({"last_checked": "2026-11-09", "faults": {}})
+    result = battery_run(monkeypatch, date(2026, 11, 10), ALL_NORMAL)
+    assert result.exit_code == 1
+    assert load_state()["battery_checked"] is None
