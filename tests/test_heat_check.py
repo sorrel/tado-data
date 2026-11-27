@@ -14,14 +14,14 @@ from typing import ClassVar
 import pytest
 from click.testing import CliRunner
 
-import commands.heat_check as hc
-import core.notify as notify_mod
-import core.storage as storage_mod
-from core.auth import LoginNeeded
-from core.client import RateLimited
-from core.heat_detect import Offline, Warming
-from core.heat_store import load_day_report, load_state, save_state
-from core.storage import load_battery_history
+import tado_data.commands.heat_check as hc
+import tado_data.core.notify as notify_mod
+import tado_data.core.storage as storage_mod
+from tado_data.core.auth import LoginNeeded
+from tado_data.core.client import RateLimited
+from tado_data.core.heat_detect import Offline, Warming
+from tado_data.core.heat_store import load_day_report, load_state, save_state
+from tado_data.core.storage import load_battery_history
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "dayreport_fault.json").read_text())
 FAULT_DAY = date(2026, 11, 10)

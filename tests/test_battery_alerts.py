@@ -1,6 +1,6 @@
 """Tests for which battery changes the scheduled check notifies."""
 
-from core.battery_alerts import battery_changes
+from tado_data.core.battery_alerts import battery_changes
 
 LABELS = {"VA1": "Loo valve"}
 NORMAL = {"good_since": "2026-04-17", "low_since": None}

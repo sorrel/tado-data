@@ -14,7 +14,7 @@ from contextlib import contextmanager
 import click
 import requests
 
-from core.paths import TOKEN_FILE
+from tado_data.core.paths import TOKEN_FILE
 
 # Tado's public OAuth2 client ID
 CLIENT_ID = "1bb50063-6b0c-4d11-bd99-387f4a91cc46"

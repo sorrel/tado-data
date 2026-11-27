@@ -10,8 +10,8 @@ import json
 
 import pytest
 
-from core.jsonfile import DamagedFile, save_json
-from core.storage import (
+from tado_data.core.jsonfile import DamagedFile, save_json
+from tado_data.core.storage import (
     AlreadyReplacedToday,
     NoOldBatteries,
     add_meter_reading,

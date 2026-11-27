@@ -9,11 +9,11 @@ import json
 import pytest
 from click.testing import CliRunner
 
-from commands.battery_record import (
+from tado_data.commands.battery_record import (
     battery_reading_command,
     battery_replaced_command,
 )
-from commands.device_lookup import complete_device, device_zone_map, match_rooms
+from tado_data.commands.device_lookup import complete_device, device_zone_map, match_rooms
 from tests.battery_helpers import (
     ROOM_HISTORY,
     FakeClient,

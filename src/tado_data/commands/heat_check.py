@@ -15,21 +15,21 @@ from datetime import date, datetime, timedelta
 
 import click
 
-from core.auth import AuthError, AuthNetworkError, LoginNeeded, TokenLockBusy
-from core.battery_alerts import battery_changes
-from core.battery_devices import (
+from tado_data.core.auth import AuthError, AuthNetworkError, LoginNeeded, TokenLockBusy
+from tado_data.core.battery_alerts import battery_changes
+from tado_data.core.battery_devices import (
     BatteryDevice,
     battery_devices,
     device_rooms,
     record_battery_states,
 )
-from core.client import RateLimited, TadoAPIError, TadoClient
-from core.heat_alerts import update_faults
-from core.heat_detect import LONDON, Finding, Offline, Warming, find_problems
-from core.heat_store import load_day_report, load_state, save_day_report, save_state
-from core.jsonfile import DamagedFile
-from core.notify import NotifyError, notify
-from core.storage import load_battery_history
+from tado_data.core.client import RateLimited, TadoAPIError, TadoClient
+from tado_data.core.heat_alerts import update_faults
+from tado_data.core.heat_detect import LONDON, Finding, Offline, Warming, find_problems
+from tado_data.core.heat_store import load_day_report, load_state, save_day_report, save_state
+from tado_data.core.jsonfile import DamagedFile
+from tado_data.core.notify import NotifyError, notify
+from tado_data.core.storage import load_battery_history
 
 TITLE = "Tado heat check"
 MAX_CATCH_UP = 7

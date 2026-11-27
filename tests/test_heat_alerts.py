@@ -5,7 +5,7 @@ Tests for when a heat-check fault is notified: new, weekly, cleared.
 import copy
 from datetime import date, timedelta
 
-from core.heat_alerts import update_faults
+from tado_data.core.heat_alerts import update_faults
 
 DAY = date(2026, 11, 10)
 LOO_OFFLINE = {"12:offline": ("Downstairs Loo", "offline")}

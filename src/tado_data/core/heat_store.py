@@ -9,8 +9,8 @@ Both live in stored_data/ (gitignored) and are saved atomically.
 import os
 from datetime import date
 
-from core.jsonfile import load_json, save_json
-from core.paths import STORED_DATA_DIR
+from tado_data.core.jsonfile import load_json, save_json
+from tado_data.core.paths import STORED_DATA_DIR
 
 DAY_REPORTS_DIR = os.path.join(STORED_DATA_DIR, "day_reports")
 HEAT_STATE_FILE = os.path.join(STORED_DATA_DIR, "heat_check.json")

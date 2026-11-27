@@ -9,7 +9,7 @@ import json
 import pytest
 from click.testing import CliRunner
 
-from commands.battery_record import (
+from tado_data.commands.battery_record import (
     battery_make_command,
     battery_reading_command,
     battery_replaced_command,

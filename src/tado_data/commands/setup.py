@@ -7,9 +7,9 @@ from typing import Any
 
 import click
 
-from core.auth import clear_tokens, device_code_flow, load_tokens
-from core.client import TadoClient
-from core.spacing import spaced_output
+from tado_data.core.auth import clear_tokens, device_code_flow, load_tokens
+from tado_data.core.client import TadoClient
+from tado_data.core.spacing import spaced_output
 
 
 class ColouredGroup(click.Group):

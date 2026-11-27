@@ -7,7 +7,13 @@ No test reaches Tado: a fake client stands in, per CLAUDE.md.
 import click
 import pytest
 
-from commands.battery_format import AGE_BANDS, age_colour, average_days, format_average, format_last
+from tado_data.commands.battery_format import (
+    AGE_BANDS,
+    age_colour,
+    average_days,
+    format_average,
+    format_last,
+)
 
 
 @pytest.mark.parametrize(

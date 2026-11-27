@@ -9,7 +9,7 @@ import json
 import click
 from click.testing import CliRunner
 
-from commands.battery import _days_since, _format_lows, battery_command
+from tado_data.commands.battery import _days_since, _format_lows, battery_command
 from tests.battery_helpers import (
     FakeReportClient,
     fake_tado,

@@ -150,7 +150,12 @@ battery check leaves `battery_checked` alone, so a later run that day retries.
 
 ## File Structure
 
-- `tado.py` — CLI entry point (Click)
+The code is a src layout, per the workspace convention: the package is
+`src/tado_data/`, and the `core/` and `commands/` paths below are inside it
+(imported as `tado_data.core…`, `tado_data.commands…`).
+
+- `tado.py` — a three-line launcher kept at the top so `uv run python tado.py`, the launchd job and the shell completion keep working
+- `src/tado_data/cli.py` — the Click group that every command is added to (also the `tado` script in `pyproject.toml`)
 - `core/auth.py` — OAuth2 device code flow and token management
 - `core/client.py` — TadoClient class for API requests
 - `commands/setup.py` — auth, logout, status commands + ColouredGroup

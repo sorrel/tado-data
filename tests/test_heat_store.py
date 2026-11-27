@@ -6,8 +6,8 @@ from datetime import date
 
 import pytest
 
-from core.heat_store import load_day_report, load_state, save_day_report, save_state
-from core.jsonfile import DamagedFile
+from tado_data.core.heat_store import load_day_report, load_state, save_day_report, save_state
+from tado_data.core.jsonfile import DamagedFile
 
 DAY = date(2026, 11, 10)
 

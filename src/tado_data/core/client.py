@@ -10,7 +10,7 @@ from typing import Any
 import click
 import requests
 
-from core.auth import AuthError, LoginNeeded, device_code_flow, get_access_token
+from tado_data.core.auth import AuthError, LoginNeeded, device_code_flow, get_access_token
 
 API_BASE = "https://my.tado.com/api/v2"
 

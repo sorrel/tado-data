@@ -4,8 +4,8 @@ Zones command — shows which devices are zone controllers vs TRVs.
 
 import click
 
-from commands.table import count, echo_header
-from core.client import TadoClient
+from tado_data.commands.table import count, echo_header
+from tado_data.core.client import TadoClient
 
 
 @click.command("zones")

@@ -11,9 +11,9 @@ import stat
 import pytest
 import requests
 
-import core.client as client_mod
-from core import auth
-from core.client import TadoClient
+import tado_data.core.client as client_mod
+from tado_data.core import auth
+from tado_data.core.client import TadoClient
 
 
 class FakeResponse:

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from commands.battery_format import (
+from tado_data.commands.battery_format import (
     GOOD_STYLE,
     LOW_STYLE,
     MAKE_STYLE,
@@ -22,9 +22,9 @@ from commands.battery_format import (
     format_last,
     format_percents,
 )
-from commands.device_lookup import device_zone_map
-from commands.table import SECTION_STYLE, cell, count, echo_section
-from core.battery_seasons import (
+from tado_data.commands.device_lookup import device_zone_map
+from tado_data.commands.table import SECTION_STYLE, cell, count, echo_section
+from tado_data.core.battery_seasons import (
     HINT,
     SeasonSummary,
     bar,
@@ -34,8 +34,8 @@ from core.battery_seasons import (
     season_summaries,
     season_svg,
 )
-from core.client import TadoClient
-from core.storage import (
+from tado_data.core.client import TadoClient
+from tado_data.core.storage import (
     Lifespan,
     LowPeriod,
     MeterReading,

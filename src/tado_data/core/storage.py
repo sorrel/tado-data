@@ -8,8 +8,8 @@ import os
 from datetime import date
 from typing import NotRequired, TypedDict, cast
 
-from core.jsonfile import load_json, save_json
-from core.paths import STORED_DATA_DIR
+from tado_data.core.jsonfile import load_json, save_json
+from tado_data.core.paths import STORED_DATA_DIR
 
 BATTERY_HISTORY_FILE = os.path.join(STORED_DATA_DIR, "battery_history.json")
 # Which room each device was in when last seen, so tab completion can offer

@@ -45,4 +45,4 @@ def test_does_not_run_at_login():
 def test_installer_sends_a_test_notification():
     """macOS may hide notifications until allowed; find out at install, not weeks later."""
     script = (TEMPLATE.parent / "install-heat-check.sh").read_text()
-    assert "display notification" in script or "core.notify" in script
+    assert "display notification" in script or "tado_data.core.notify" in script

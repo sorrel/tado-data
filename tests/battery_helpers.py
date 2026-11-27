@@ -4,14 +4,18 @@ Fakes and seeding shared by the battery tests. Nothing here reaches Tado.
 
 import json
 
-import commands.battery
-import commands.battery_history
-import commands.device_lookup
+import tado_data.commands.battery
+import tado_data.commands.battery_history
+import tado_data.commands.device_lookup
 
 
 def fake_tado(monkeypatch, client_class):
     """Use CLIENT_CLASS in place of TadoClient in every battery command."""
-    for module in (commands.battery, commands.battery_history, commands.device_lookup):
+    for module in (
+        tado_data.commands.battery,
+        tado_data.commands.battery_history,
+        tado_data.commands.device_lookup,
+    ):
         monkeypatch.setattr(module, "TadoClient", client_class)
 
 

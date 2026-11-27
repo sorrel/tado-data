@@ -8,8 +8,8 @@ from typing import Any
 
 import click
 
-from core.battery_seasons import age_band
-from core.storage import Lifespan
+from tado_data.core.battery_seasons import age_band
+from tado_data.core.storage import Lifespan
 
 # Colour bands for battery age, one per 100 days. Bright colours for a black background.
 AGE_BANDS = ["bright_green", "bright_cyan", "bright_yellow", "bright_magenta", "bright_red"]

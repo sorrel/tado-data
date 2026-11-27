@@ -7,7 +7,7 @@ Tado's device list the same way and save to the history the same way.
 
 from dataclasses import dataclass
 
-from core.storage import BatteryHistory, save_room_names, update_battery_history
+from tado_data.core.storage import BatteryHistory, save_room_names, update_battery_history
 
 # Devices that are mains-wired despite reporting a batteryState. The hall thermostat
 # is wired in, so its battery columns are meaningless — reported as N/A.

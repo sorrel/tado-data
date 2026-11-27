@@ -10,7 +10,7 @@ import re
 import click
 from click.testing import CliRunner
 
-from commands.battery_history import _on_low, _print_low_periods, battery_history_command
+from tado_data.commands.battery_history import _on_low, _print_low_periods, battery_history_command
 from tests.battery_helpers import (
     FakeReportClient,
     _past,

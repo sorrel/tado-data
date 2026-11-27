@@ -4,7 +4,14 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from core.battery_seasons import AGE_HEX, age_band, bar, season_of, season_summaries, season_svg
+from tado_data.core.battery_seasons import (
+    AGE_HEX,
+    age_band,
+    bar,
+    season_of,
+    season_summaries,
+    season_svg,
+)
 
 SVG = "{http://www.w3.org/2000/svg}"
 

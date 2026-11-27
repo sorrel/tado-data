@@ -6,7 +6,7 @@ from datetime import date
 
 import click
 
-from commands.battery_format import (
+from tado_data.commands.battery_format import (
     AGE_BANDS,
     MAKE_STYLE,
     NO_VALUE,
@@ -14,11 +14,11 @@ from commands.battery_format import (
     format_average,
     format_last,
 )
-from commands.device_lookup import device_zone_map
-from commands.table import cell, count, echo_header
-from core.battery_devices import BatteryDevice, battery_devices, record_battery_states
-from core.client import TadoClient
-from core.storage import NEW_DEVICE, BatteryHistory, DeviceHistory, LowPeriod
+from tado_data.commands.device_lookup import device_zone_map
+from tado_data.commands.table import cell, count, echo_header
+from tado_data.core.battery_devices import BatteryDevice, battery_devices, record_battery_states
+from tado_data.core.client import TadoClient
+from tado_data.core.storage import NEW_DEVICE, BatteryHistory, DeviceHistory, LowPeriod
 
 
 @click.command("battery")

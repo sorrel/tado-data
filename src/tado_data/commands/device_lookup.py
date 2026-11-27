@@ -11,9 +11,9 @@ import re
 import click
 from click.shell_completion import CompletionItem
 
-from core.battery_devices import MAINS_WIRED_SERIALS, device_rooms
-from core.client import TadoClient
-from core.storage import BatteryHistory, load_battery_history, load_room_names
+from tado_data.core.battery_devices import MAINS_WIRED_SERIALS, device_rooms
+from tado_data.core.client import TadoClient
+from tado_data.core.storage import BatteryHistory, load_battery_history, load_room_names
 
 
 def device_zone_map(client: TadoClient) -> dict[str, str]:

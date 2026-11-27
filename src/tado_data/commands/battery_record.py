@@ -7,9 +7,9 @@ from datetime import date
 
 import click
 
-from commands.battery_format import format_percents
-from commands.device_lookup import complete_device, resolve_device
-from core.storage import (
+from tado_data.commands.battery_format import format_percents
+from tado_data.commands.device_lookup import complete_device, resolve_device
+from tado_data.core.storage import (
     AlreadyReplacedToday,
     BatteryHistory,
     NoOldBatteries,

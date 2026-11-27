@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [project.scripts]
-tado = "tado:cli"
+tado = "tado_data.cli:cli"
 
 [dependency-groups]
 dev = [
@@ -20,7 +20,7 @@ dev = [
 # plain `uv run python -m pytest` works without remembering `--extra dev`.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = ["src", "."]
 
 # No line over 100 characters. `uvx ruff format` wraps code to fit;
 # `uvx ruff check --select E501` finds long strings and comments it can't.
@@ -31,12 +31,12 @@ extend-exclude = ["docs"]  # the plans quote code as it was; leave them alone
 # `uvx pyright` type-checks the application code against the project's venv.
 # Tests are left out: their partial records and fake clients are deliberate.
 [tool.pyright]
-include = ["core", "commands", "tado.py"]
+include = ["src", "tado.py"]
 venvPath = "."
 venv = ".venv"
 
 [tool.hatch.build.targets.wheel]
-packages = ["core", "commands"]
+packages = ["src/tado_data"]
 
 [build-system]
 requires = ["hatchling"]

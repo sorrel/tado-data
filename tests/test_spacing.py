@@ -10,7 +10,7 @@ import sys
 import click
 import pytest
 
-from core.spacing import spaced_output
+from tado_data.core.spacing import spaced_output
 
 
 class FakeTerminal(io.StringIO):

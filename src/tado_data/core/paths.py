@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+# src/tado_data/core/paths.py: three folders up is the project itself.
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 STORED_DATA_DIR = str(PROJECT_ROOT / "stored_data")
 TOKEN_FILE = PROJECT_ROOT / "tokens.json"
