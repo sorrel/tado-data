@@ -52,6 +52,26 @@ sets fitted in that season, and how many sets each bar is based on.
   rule). Piped output loses the colour through `click.echo`; the block
   characters stay.
 
+## SVG copy
+
+`battery-history --svg FILE` also writes the same chart to `FILE` as a
+self-contained SVG, for opening in a browser or putting in a note. The
+terminal output is unchanged, followed by one line saying where the file went.
+
+- Same content as the terminal chart: title, the four seasons in order, a bar
+  and `212d ×3` for each, the range in grey for two or more sets, `none yet`
+  for an empty season, and the two footnotes (the hint in yellow).
+- Dark card (`#1e1e1e` background, light text) so it matches the terminal
+  look, with rounded bar ends; bars scaled to the longest season average.
+- Bar colours follow the same 100-day bands as `_age_colour`, as hex:
+  `#4ade80` green, `#22d3ee` cyan, `#facc15` yellow, `#e879f9` magenta,
+  `#f87171` red. The band is worked out once (`age_band` in
+  `core/battery_seasons.py`) and used by both the terminal and the SVG.
+- Written by hand as text: no new dependency. System sans-serif font, fixed
+  size (about 640 × 260), with a `viewBox` so it scales.
+- With no measured sets yet, nothing is written and the command says so; the
+  rest of `battery-history` still prints. An existing file is overwritten.
+
 ## Approaches considered
 
 1. **Terminal chart in `battery-history` (chosen).** Fits how the project
@@ -59,7 +79,8 @@ sets fitted in that season, and how many sets each bar is based on.
    `battery_history.json`, so it makes no requests.
 2. **A browser page with a real chart.** Could look richer, but it would be
    the only thing in the project that isn't terminal output, and you'd need
-   a browser to look at it. Not chosen.
+   a browser to look at it. Not chosen as the main view; the `--svg` copy
+   (above) gives the same chart as a file instead, without a page to keep.
 3. **Hours of heating per set instead of season of fitting.** Fairer, since
    a set's seven months span several seasons, but it needs day reports back
    to every fitting date (about 19 requests a day fetched). Left for later;
