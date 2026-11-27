@@ -11,6 +11,7 @@ from typing import Any
 import click
 from click.shell_completion import CompletionItem
 
+from core.battery_seasons import SeasonSummary, bar, season_summaries
 from core.client import TadoClient
 from core.storage import (
     AlreadyReplacedToday,
@@ -40,6 +41,9 @@ MAINS_WIRED_SERIALS = {"SU3893321984"}
 
 # Shown in a table cell that has nothing to show.
 NO_VALUE = "—"
+
+# The longest bar in the season chart, in columns.
+BAR_WIDTH = 30
 
 # battery-history colours: one per kind of value, so each column reads at a glance.
 SECTION_STYLE: dict[str, Any] = {"fg": "bright_cyan", "bold": True}
@@ -704,6 +708,42 @@ def _print_lifespans(lifespans: list[tuple[str, PastBattery]], device_zones: dic
     _print_lifespan_averages(all_batteries)
     _print_device_averages(rows, zone_width, serial_width)
     _print_make_averages(all_batteries)
+    _print_season_averages(all_batteries)
+
+
+def _print_season_averages(all_batteries: list[PastBattery]) -> None:
+    """Print a bar per season fitted: a winter set works harder, so it can't match a summer one."""
+    summaries, left_out = season_summaries(all_batteries)
+    longest = max((s.average for s in summaries if s.average), default=None)
+    if longest is None:
+        return
+
+    header = f"  {'Season':<6}   {'Average days to first low':<{BAR_WIDTH}}  {'':>8}"
+    _echo_section("Average by season fitted", header)
+    for summary in summaries:
+        click.echo(f"  {_cell(summary.season, 6, **ZONE_STYLE)}   {_season_bar(summary, longest)}")
+    if any(0 < len(s.days) < 3 for s in summaries):
+        hint = "Fewer than 3 sets in a season: read it as a hint, not a result."
+        click.echo(click.style(f"  {hint}", fg="yellow"))
+    if left_out:
+        note = (
+            f"{_count(left_out, 'set')} not counted: unknown age, or taken out before they warned."
+        )
+        click.echo(click.style(f"  {note}", dim=True))
+    click.echo()
+
+
+def _season_bar(summary: SeasonSummary, longest: int) -> str:
+    """One season's bar, its average and set count, and the range when there are two or more."""
+    if summary.average is None:
+        return f"{'':<{BAR_WIDTH}}  " + click.style("none yet", dim=True)
+    colour = _age_colour(summary.average)
+    drawn = _cell(bar(summary.average, longest, BAR_WIDTH), BAR_WIDTH, fg=colour)
+    figure = _cell(f"{summary.average}d ×{len(summary.days)}", 8, ">", fg=colour, bold=True)
+    line = f"{drawn}  {figure}"
+    if len(summary.days) >= 2:
+        line += click.style(f"   {summary.shortest}–{summary.longest}d", dim=True)
+    return line
 
 
 def _print_make_averages(all_batteries: list[PastBattery]) -> None:

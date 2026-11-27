@@ -1186,3 +1186,72 @@ def test_low_warnings_list_shows_when_each_spell_started_and_last_day_seen_low(c
     assert "Last low" in lines[1]
     assert "2026-08-20  2026-08-21  2026-08-22" in lines[3]
     assert "2026-08-24  2026-08-24  still low" in lines[4]
+
+
+# --- Average by season fitted ---------------------------------------------
+
+
+def _season_section(output):
+    """The lines of the season chart, from its rule to the blank line after it."""
+    lines = output.splitlines()
+    start = next(i for i, line in enumerate(lines) if "Average by season fitted" in line)
+    rows = []
+    for line in lines[start + 3 :]:
+        if not line.strip():
+            break
+        rows.append(line)
+    return rows
+
+
+def test_season_chart_is_left_out_with_no_measured_sets(frozen_today, history_file, monkeypatch):
+    _seed_history(history_file, [_past("2026-04-17", 209, minimum=True)])
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    assert result.exit_code == 0
+    assert "Average by season fitted" not in result.output
+
+
+def test_season_chart_shows_every_season_and_lines_up(frozen_today, history_file, monkeypatch):
+    _seed_history(
+        history_file,
+        [_past("2027-10-01", 150), _past("2027-11-20", 170), _past("2027-07-01", 230)],
+    )
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    rows = _season_section(result.output)
+    assert [row.split()[0] for row in rows[:4]] == ["Spring", "Summer", "Autumn", "Winter"]
+    assert "█" * 30 in rows[1] and "230d ×1" in rows[1]
+    assert "160d ×2" in rows[2] and "150–170d" in rows[2]
+    assert "none yet" in rows[0] and "none yet" in rows[3]
+    assert rows[1].index("d ×") == rows[2].index("d ×")
+    assert rows[0].index("none yet") == rows[3].index("none yet")
+    assert "read it as a hint" in result.output
+
+
+def test_season_chart_says_what_it_left_out(frozen_today, history_file, monkeypatch):
+    _seed_history(
+        history_file,
+        [_past("2027-10-01", 150), _past("2026-04-17", 209, minimum=True)],
+    )
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    assert "1 set not counted: unknown age, or taken out before they warned." in result.output
+
+
+def test_season_chart_drops_the_hint_with_three_sets_everywhere(
+    frozen_today, history_file, monkeypatch
+):
+    fitted = ["2027-04-01", "2027-07-01", "2027-10-01", "2027-12-01"]
+    _seed_history(history_file, [_past(day, 200) for day in fitted for _ in range(3)])
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+
+    result = CliRunner().invoke(battery_mod.battery_history_command)
+
+    assert "Average by season fitted" in result.output
+    assert "read it as a hint" not in result.output
