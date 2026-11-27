@@ -9,8 +9,8 @@ from datetime import date
 import pytest
 import requests
 
-import core.client as client_mod
-from core.client import RateLimited, TadoAPIError, TadoClient
+import tado_data.core.client as client_mod
+from tado_data.core.client import RateLimited, TadoAPIError, TadoClient
 
 
 class FakeResponse:

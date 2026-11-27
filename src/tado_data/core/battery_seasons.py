@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 
-from core.storage import PastBattery
+from tado_data.core.storage import PastBattery
 
 SEASONS: tuple[str, ...] = ("Spring", "Summer", "Autumn", "Winter")
 

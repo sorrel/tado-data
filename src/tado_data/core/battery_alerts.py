@@ -7,7 +7,7 @@ history moving on by a day, with `seen` advancing on a spell already known,
 is not. Pure: it compares the history before and after one update.
 """
 
-from core.storage import NEW_DEVICE, BatteryHistory, DeviceHistory
+from tado_data.core.storage import NEW_DEVICE, BatteryHistory, DeviceHistory
 
 
 def _is_low(entry: DeviceHistory) -> bool:

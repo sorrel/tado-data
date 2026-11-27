@@ -10,10 +10,11 @@ import json
 import os
 import time
 from contextlib import contextmanager
-from pathlib import Path
 
 import click
 import requests
+
+from tado_data.core.paths import TOKEN_FILE
 
 # Tado's public OAuth2 client ID
 CLIENT_ID = "1bb50063-6b0c-4d11-bd99-387f4a91cc46"
@@ -23,7 +24,6 @@ DEVICE_AUTH_URL = "https://login.tado.com/oauth2/device_authorize"
 TOKEN_URL = "https://login.tado.com/oauth2/token"
 
 # Token storage path (project-local)
-TOKEN_FILE = Path(__file__).parent.parent / "tokens.json"
 TOKEN_LOCK_FILE = TOKEN_FILE.with_name("tokens.json.lock")
 
 # How long to wait for another tado command to finish refreshing the login.

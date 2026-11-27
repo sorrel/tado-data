@@ -5,13 +5,12 @@ Stored in stored_data/ directory, gitignored.
 
 import json
 import os
-import shutil
 from datetime import date
 from typing import NotRequired, TypedDict, cast
 
-import click
+from tado_data.core.jsonfile import load_json, save_json
+from tado_data.core.paths import STORED_DATA_DIR
 
-STORED_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "stored_data")
 BATTERY_HISTORY_FILE = os.path.join(STORED_DATA_DIR, "battery_history.json")
 # Which room each device was in when last seen, so tab completion can offer
 # room names without asking Tado. A convenience only: losing it costs nothing.
@@ -71,42 +70,12 @@ type BatteryHistory = dict[str, DeviceHistory]  # keyed by device serial
 NEW_DEVICE: DeviceHistory = {"good_since": None, "low_since": None}
 
 
-class BatteryHistoryError(click.ClickException):
-    """The history file can't be read. Carrying on would overwrite it."""
-
-
 class NoOldBatteries(Exception):
     """A reading was meant for batteries already taken out, but none have been."""
 
 
 class AlreadyReplacedToday(Exception):
     """The batteries were marked as replaced earlier today and haven't warned since."""
-
-
-def _load_json(path: str) -> dict:
-    try:
-        with open(path) as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-    except ValueError as error:  # bad JSON, or bytes that aren't text
-        raise BatteryHistoryError(
-            f"{path} is damaged, so nothing has been changed. "
-            f"Restore it from {path}.bak or your own backup. ({error})"
-        ) from error
-
-
-def _save_json(path: str, data: dict) -> None:
-    """Save so that a failure part-way leaves the file intact, keeping the last version as .bak."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    temporary = f"{path}.tmp"
-    with open(temporary, "w") as f:
-        json.dump(data, f, indent=2)
-        f.flush()
-        os.fsync(f.fileno())
-    if os.path.exists(path):
-        shutil.copy2(path, f"{path}.bak")
-    os.replace(temporary, path)
 
 
 def _migrate_entry(entry: dict) -> DeviceHistory:
@@ -123,7 +92,7 @@ def _migrate_entry(entry: dict) -> DeviceHistory:
 
 def load_battery_history() -> BatteryHistory:
     """Return stored battery state history keyed by device serial number."""
-    raw = _load_json(BATTERY_HISTORY_FILE).get("devices", {})
+    raw = load_json(BATTERY_HISTORY_FILE).get("devices", {})
     return {serial: _migrate_entry(entry) for serial, entry in raw.items()}
 
 
@@ -231,7 +200,7 @@ def mark_battery_replaced(
     if past:
         new_entry["past_batteries"] = past
     history[serial] = new_entry
-    _save_json(BATTERY_HISTORY_FILE, {"devices": history})
+    save_json(BATTERY_HISTORY_FILE, {"devices": history})
     return retired
 
 
@@ -252,14 +221,14 @@ def set_battery_make(serial: str, make: str, old_set: bool = False) -> tuple[str
         raise ValueError("blank make")
     if not old_set:
         history[serial] = {**entry, "make": tidied}
-        _save_json(BATTERY_HISTORY_FILE, {"devices": history})
+        save_json(BATTERY_HISTORY_FILE, {"devices": history})
         return tidied, None
     past = list(entry.get("past_batteries", []))
     if not past:
         raise NoOldBatteries(serial)
     past[-1] = {**past[-1], "make": tidied}
     history[serial] = {**entry, "past_batteries": past}
-    _save_json(BATTERY_HISTORY_FILE, {"devices": history})
+    save_json(BATTERY_HISTORY_FILE, {"devices": history})
     return tidied, past[-1]["replaced"]
 
 
@@ -312,7 +281,7 @@ def add_meter_reading(
         history[serial] = {**entry, "past_batteries": past}
     else:
         history[serial] = _with_reading(entry, reading)
-    _save_json(BATTERY_HISTORY_FILE, {"devices": history})
+    save_json(BATTERY_HISTORY_FILE, {"devices": history})
     return reading, replaced
 
 
@@ -348,7 +317,7 @@ def update_battery_history(
             changed = True
 
     if changed:
-        _save_json(BATTERY_HISTORY_FILE, {"devices": history})
+        save_json(BATTERY_HISTORY_FILE, {"devices": history})
 
     return history
 
@@ -408,7 +377,7 @@ def save_room_names(device_zones: dict[str, str]) -> None:
         return
     try:
         if _load_room_names() != device_zones:
-            _save_json(ROOM_NAMES_FILE, device_zones)
+            save_json(ROOM_NAMES_FILE, device_zones)
     except OSError:
         pass
 

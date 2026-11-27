@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from core.heat_detect import day_window, find_problems
+from tado_data.core.heat_detect import day_window, find_problems
 
 FIXTURE = Path(__file__).parent / "fixtures" / "dayreport_fault.json"
 DAY = date(2026, 11, 10)  # GMT, so local times equal UTC

@@ -15,15 +15,21 @@ from datetime import date, datetime, timedelta
 
 import click
 
-from commands.battery import battery_rows, device_rooms, record_battery_states
-from core.auth import AuthError, AuthNetworkError, LoginNeeded, TokenLockBusy
-from core.battery_alerts import battery_changes
-from core.client import RateLimited, TadoAPIError, TadoClient
-from core.heat_alerts import update_faults
-from core.heat_detect import LONDON, Finding, Offline, Warming, find_problems
-from core.heat_store import load_day_report, load_state, save_day_report, save_state
-from core.notify import NotifyError, notify
-from core.storage import BatteryHistoryError, load_battery_history
+from tado_data.core.auth import AuthError, AuthNetworkError, LoginNeeded, TokenLockBusy
+from tado_data.core.battery_alerts import battery_changes
+from tado_data.core.battery_devices import (
+    BatteryDevice,
+    battery_devices,
+    device_rooms,
+    record_battery_states,
+)
+from tado_data.core.client import RateLimited, TadoAPIError, TadoClient
+from tado_data.core.heat_alerts import update_faults
+from tado_data.core.heat_detect import LONDON, Finding, Offline, Warming, find_problems
+from tado_data.core.heat_store import load_day_report, load_state, save_day_report, save_state
+from tado_data.core.jsonfile import DamagedFile
+from tado_data.core.notify import NotifyError, notify
+from tado_data.core.storage import load_battery_history
 
 TITLE = "Tado heat check"
 MAX_CATCH_UP = 7
@@ -109,7 +115,7 @@ def _failure_message(error: Exception) -> str:
         return "Heat check didn't run: Tado didn't say which home to check."
     if isinstance(error, NoHeatingZones):
         return "Heat check didn't run: Tado listed no heating zones."
-    if isinstance(error, BatteryHistoryError):
+    if isinstance(error, DamagedFile):
         return "Heat check didn't run: a saved file is damaged. See the log."
     return "Heat check didn't run: unexpected error. See the log."
 
@@ -177,21 +183,22 @@ def _check_days(client, days: list[date], zones: list[dict], state: dict, lines:
     return state
 
 
-def _device_label(row: dict) -> str:
-    kind = "valve" if row["type"].startswith("VA") else "thermostat"
-    return f"{row['zone']} {kind}"
+def _device_label(device: BatteryDevice) -> str:
+    kind = "valve" if device.type.startswith("VA") else "thermostat"
+    return f"{device.zone} {kind}"
 
 
 def _check_batteries(client, zones: list[dict]) -> list[str]:
     """Save today's battery states to the history; the changes to notify."""
-    rows = battery_rows(client.get_devices(strict=True) or [], device_rooms(zones), None)
+    devices = battery_devices(client.get_devices(strict=True) or [], device_rooms(zones))
     before = load_battery_history()
-    after = record_battery_states(rows)
-    for row in rows:
-        if not row["mains"]:
-            online = "online" if row["connection"] else "offline"
-            _log(f"Battery: {_device_label(row)} {row['serial']} {row['battery']}, {online}")
-    changes = battery_changes(before, after, {row["serial"]: _device_label(row) for row in rows})
+    after = record_battery_states(devices)
+    for device in devices:
+        if not device.mains:
+            online = "online" if device.connected else "offline"
+            _log(f"Battery: {_device_label(device)} {device.serial} {device.battery}, {online}")
+    labels = {device.serial: _device_label(device) for device in devices}
+    changes = battery_changes(before, after, labels)
     if not changes:
         _log("Batteries: no change")
     return changes
@@ -204,7 +211,7 @@ def _run_scheduled(today: date) -> int:
     except Exception as error:
         _log(f"Failed: {error!r}")
         _send("; ".join([_failure_message(error), *lines]))
-        expected = (AuthError, TadoAPIError, HomeNotFound, NoHeatingZones, BatteryHistoryError)
+        expected = (AuthError, TadoAPIError, HomeNotFound, NoHeatingZones, DamagedFile)
         if not isinstance(error, expected):
             raise  # the traceback goes to the log
         return 1  # whether or not the notification showed, the check failed

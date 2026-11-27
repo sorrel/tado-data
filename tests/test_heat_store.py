@@ -6,8 +6,8 @@ from datetime import date
 
 import pytest
 
-from core.heat_store import load_day_report, load_state, save_day_report, save_state
-from core.storage import BatteryHistoryError
+from tado_data.core.heat_store import load_day_report, load_state, save_day_report, save_state
+from tado_data.core.jsonfile import DamagedFile
 
 DAY = date(2026, 11, 10)
 
@@ -52,7 +52,7 @@ def test_state_round_trip_keeps_backup(heat_store_dir):
 def test_damaged_state_file_is_refused(heat_store_dir):
     path = heat_store_dir / "heat_check.json"
     path.write_text("{")
-    with pytest.raises(BatteryHistoryError):
+    with pytest.raises(DamagedFile):
         load_state()
     assert path.read_text() == "{"
 
@@ -61,5 +61,5 @@ def test_damaged_day_report_is_refused(heat_store_dir):
     folder = heat_store_dir / "day_reports" / "2026-11-10"
     folder.mkdir(parents=True)
     (folder / "12.json").write_text("not json")
-    with pytest.raises(BatteryHistoryError):
+    with pytest.raises(DamagedFile):
         load_day_report(DAY, 12)

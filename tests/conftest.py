@@ -27,12 +27,19 @@ class FrozenDate(date):
 
 @pytest.fixture
 def frozen_today(monkeypatch):
-    """Pin date.today() in both modules that call it."""
-    import commands.battery as battery_mod
-    import core.storage as storage_mod
+    """Pin date.today() in every module that calls it."""
+    import tado_data.commands.battery
+    import tado_data.commands.battery_history
+    import tado_data.commands.battery_record
+    import tado_data.core.storage
 
-    monkeypatch.setattr(storage_mod, "date", FrozenDate)
-    monkeypatch.setattr(battery_mod, "date", FrozenDate)
+    for module in (
+        tado_data.core.storage,
+        tado_data.commands.battery,
+        tado_data.commands.battery_history,
+        tado_data.commands.battery_record,
+    ):
+        monkeypatch.setattr(module, "date", FrozenDate)
     return TODAY
 
 
@@ -42,7 +49,7 @@ def room_names_file(tmp_path, monkeypatch):
 
     Any test that builds a zone map would otherwise write stored_data/room_names.json.
     """
-    import core.storage as storage_mod
+    import tado_data.core.storage as storage_mod
 
     path = tmp_path / "room_names.json"
     monkeypatch.setattr(storage_mod, "ROOM_NAMES_FILE", str(path))
@@ -55,7 +62,7 @@ def history_file(tmp_path, monkeypatch):
 
     Guards the real stored_data/battery_history.json from the test run.
     """
-    import core.storage as storage_mod
+    import tado_data.core.storage as storage_mod
 
     path = tmp_path / "battery_history.json"
     monkeypatch.setattr(storage_mod, "BATTERY_HISTORY_FILE", str(path))
@@ -68,7 +75,7 @@ def token_file(tmp_path, monkeypatch):
 
     Guards the real login from the test run.
     """
-    import core.auth as auth_mod
+    import tado_data.core.auth as auth_mod
 
     path = tmp_path / "tokens.json"
     monkeypatch.setattr(auth_mod, "TOKEN_FILE", path)
@@ -82,7 +89,7 @@ def heat_store_dir(tmp_path, monkeypatch):
 
     Guards the real stored_data/ from the test run.
     """
-    import core.heat_store as heat_store_mod
+    import tado_data.core.heat_store as heat_store_mod
 
     monkeypatch.setattr(heat_store_mod, "DAY_REPORTS_DIR", str(tmp_path / "day_reports"))
     monkeypatch.setattr(heat_store_mod, "HEAT_STATE_FILE", str(tmp_path / "heat_check.json"))
