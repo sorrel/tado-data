@@ -10,11 +10,10 @@ import json
 
 import pytest
 
+from core.jsonfile import DamagedFile, save_json
 from core.storage import (
     AlreadyReplacedToday,
-    BatteryHistoryError,
     NoOldBatteries,
-    _save_json,
     add_meter_reading,
     load_battery_history,
     mark_battery_replaced,
@@ -463,7 +462,7 @@ def test_damaged_file_is_refused_and_left_alone(frozen_today, history_file, dama
     """Treating it as empty would overwrite the real history on the next save."""
     history_file.write_bytes(damaged)
 
-    with pytest.raises(BatteryHistoryError):
+    with pytest.raises(DamagedFile):
         update_battery_history({SERIAL: "NORMAL"})
 
     assert history_file.read_bytes() == damaged
@@ -472,7 +471,7 @@ def test_damaged_file_is_refused_and_left_alone(frozen_today, history_file, dama
 def test_marking_replaced_is_refused_on_a_damaged_file(frozen_today, history_file):
     history_file.write_text("{ not json at all")
 
-    with pytest.raises(BatteryHistoryError):
+    with pytest.raises(DamagedFile):
         mark_battery_replaced(SERIAL)
 
 
@@ -485,7 +484,7 @@ def test_interrupted_save_leaves_the_file_intact(frozen_today, history_file):
 
     # json.dump writes as it goes, so this fails part-way through the save
     with pytest.raises(TypeError):
-        _save_json(str(history_file), {"devices": {SERIAL: object()}})
+        save_json(str(history_file), {"devices": {SERIAL: object()}})
 
     assert history_file.read_text() == before
 

@@ -22,8 +22,9 @@ from core.client import RateLimited, TadoAPIError, TadoClient
 from core.heat_alerts import update_faults
 from core.heat_detect import LONDON, Finding, Offline, Warming, find_problems
 from core.heat_store import load_day_report, load_state, save_day_report, save_state
+from core.jsonfile import DamagedFile
 from core.notify import NotifyError, notify
-from core.storage import BatteryHistoryError, load_battery_history
+from core.storage import load_battery_history
 
 TITLE = "Tado heat check"
 MAX_CATCH_UP = 7
@@ -109,7 +110,7 @@ def _failure_message(error: Exception) -> str:
         return "Heat check didn't run: Tado didn't say which home to check."
     if isinstance(error, NoHeatingZones):
         return "Heat check didn't run: Tado listed no heating zones."
-    if isinstance(error, BatteryHistoryError):
+    if isinstance(error, DamagedFile):
         return "Heat check didn't run: a saved file is damaged. See the log."
     return "Heat check didn't run: unexpected error. See the log."
 
@@ -204,7 +205,7 @@ def _run_scheduled(today: date) -> int:
     except Exception as error:
         _log(f"Failed: {error!r}")
         _send("; ".join([_failure_message(error), *lines]))
-        expected = (AuthError, TadoAPIError, HomeNotFound, NoHeatingZones, BatteryHistoryError)
+        expected = (AuthError, TadoAPIError, HomeNotFound, NoHeatingZones, DamagedFile)
         if not isinstance(error, expected):
             raise  # the traceback goes to the log
         return 1  # whether or not the notification showed, the check failed

@@ -9,7 +9,8 @@ Both live in stored_data/ (gitignored) and are saved atomically.
 import os
 from datetime import date
 
-from core.storage import STORED_DATA_DIR, _load_json, _save_json
+from core.jsonfile import load_json, save_json
+from core.paths import STORED_DATA_DIR
 
 DAY_REPORTS_DIR = os.path.join(STORED_DATA_DIR, "day_reports")
 HEAT_STATE_FILE = os.path.join(STORED_DATA_DIR, "heat_check.json")
@@ -28,16 +29,16 @@ def load_day_report(day: date, zone_id: int) -> dict | None:
     """
     The saved report, or None if it hasn't been fetched.
 
-    Raises BatteryHistoryError if it is damaged.
+    Raises DamagedFile if it is damaged.
     """
     path = _day_report_path(day, zone_id)
     if not os.path.exists(path):
         return None
-    return _load_json(path)
+    return load_json(path)
 
 
 def save_day_report(day: date, zone_id: int, report: dict) -> None:
-    _save_json(_day_report_path(day, zone_id), report)
+    save_json(_day_report_path(day, zone_id), report)
 
 
 def load_state() -> dict:
@@ -48,10 +49,10 @@ def load_state() -> dict:
     battery_checked is the last day the batteries were checked (today, not
     yesterday: battery state is a reading of now, not a day report).
 
-    Raises BatteryHistoryError if the file is damaged, so it's never replaced
+    Raises DamagedFile if the file is damaged, so it's never replaced
     by an empty state.
     """
-    state = _load_json(HEAT_STATE_FILE)
+    state = load_json(HEAT_STATE_FILE)
     return {
         "last_checked": state.get("last_checked"),
         "faults": state.get("faults", {}),
@@ -60,4 +61,4 @@ def load_state() -> dict:
 
 
 def save_state(state: dict) -> None:
-    _save_json(HEAT_STATE_FILE, state)
+    save_json(HEAT_STATE_FILE, state)
