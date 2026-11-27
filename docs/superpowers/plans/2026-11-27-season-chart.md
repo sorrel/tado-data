@@ -2,8 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Not before late 2027.** Build once at least one measured set exists for each
-season; until then the chart has nothing worth showing.
+Built on 27 November 2026. The figures mean little until each season has
+measured sets, probably late 2027.
 
 **Goal:** An **Average by season fitted** bar chart at the end of `battery-history`,
 and `battery-history --svg FILE` to save the same chart as an SVG.

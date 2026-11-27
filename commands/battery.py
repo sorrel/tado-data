@@ -6,11 +6,23 @@ import difflib
 import re
 from collections.abc import Sequence
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 import click
 from click.shell_completion import CompletionItem
 
+from core.battery_seasons import (
+    HINT,
+    SeasonSummary,
+    age_band,
+    bar,
+    left_out_note,
+    longest_average,
+    needs_hint,
+    season_summaries,
+    season_svg,
+)
 from core.client import TadoClient
 from core.storage import (
     AlreadyReplacedToday,
@@ -40,6 +52,9 @@ MAINS_WIRED_SERIALS = {"SU3893321984"}
 
 # Shown in a table cell that has nothing to show.
 NO_VALUE = "—"
+
+# The longest bar in the season chart, in columns.
+BAR_WIDTH = 30
 
 # battery-history colours: one per kind of value, so each column reads at a glance.
 SECTION_STYLE: dict[str, Any] = {"fg": "bright_cyan", "bold": True}
@@ -88,8 +103,7 @@ def _days_since(iso_date: str | None) -> int | None:
 
 def _age_colour(days: int) -> str:
     """Pick a colour for a battery age, changing every 100 days."""
-    band = min(days // 100, len(AGE_BANDS) - 1)
-    return AGE_BANDS[band]
+    return AGE_BANDS[age_band(days)]
 
 
 def _format_last(past_batteries: Sequence[Lifespan]) -> str:
@@ -704,6 +718,38 @@ def _print_lifespans(lifespans: list[tuple[str, PastBattery]], device_zones: dic
     _print_lifespan_averages(all_batteries)
     _print_device_averages(rows, zone_width, serial_width)
     _print_make_averages(all_batteries)
+    _print_season_averages(all_batteries)
+
+
+def _print_season_averages(all_batteries: list[PastBattery]) -> None:
+    """Print a bar per season fitted: a winter set works harder, so it can't match a summer one."""
+    summaries, left_out = season_summaries(all_batteries)
+    longest = longest_average(summaries)
+    if longest is None:
+        return
+
+    header = f"  {'Season':<6}   {'Average days to first low':<{BAR_WIDTH}}  {'':>8}"
+    _echo_section("Average by season fitted", header)
+    for summary in summaries:
+        click.echo(f"  {_cell(summary.season, 6, **ZONE_STYLE)}   {_season_bar(summary, longest)}")
+    if needs_hint(summaries):
+        click.echo(click.style(f"  {HINT}", fg="yellow"))
+    if left_out:
+        click.echo(click.style(f"  {left_out_note(left_out)}", dim=True))
+    click.echo()
+
+
+def _season_bar(summary: SeasonSummary, longest: int) -> str:
+    """One season's bar, its average and set count, and the range when there are two or more."""
+    if summary.average is None:
+        return f"{'':<{BAR_WIDTH}}  " + click.style("none yet", dim=True)
+    colour = _age_colour(summary.average)
+    drawn = _cell(bar(summary.average, longest, BAR_WIDTH), BAR_WIDTH, fg=colour)
+    figure = _cell(f"{summary.average}d ×{len(summary.days)}", 8, ">", fg=colour, bold=True)
+    line = f"{drawn}  {figure}"
+    if len(summary.days) >= 2:
+        line += click.style(f"   {summary.shortest}–{summary.longest}d", dim=True)
+    return line
 
 
 def _print_make_averages(all_batteries: list[PastBattery]) -> None:
@@ -820,7 +866,13 @@ def _print_low_periods(lows: list[tuple[str, LowPeriod]], device_zones: dict) ->
 
 
 @click.command("battery-history")
-def battery_history_command():
+@click.option(
+    "--svg",
+    "svg_path",
+    type=click.Path(dir_okay=False, writable=True, path_type=Path),
+    help="Also save the season chart as an SVG file.",
+)
+def battery_history_command(svg_path: Path | None):
     """Show every replaced battery and low warning, with averages."""
     history = load_battery_history()
     lifespans = [
@@ -863,3 +915,18 @@ def battery_history_command():
         _print_low_periods(lows, device_zones)
     if readings:
         _print_meter_readings(readings, device_zones)
+    if svg_path:
+        _save_season_svg([battery for _, battery in lifespans], svg_path)
+
+
+def _save_season_svg(all_batteries: list[PastBattery], path: Path) -> None:
+    """Write the season chart to an SVG file, or say why there's nothing to draw yet."""
+    summaries, left_out = season_summaries(all_batteries)
+    if longest_average(summaries) is None:
+        click.echo(click.style("  No measured sets yet, so no season chart to save.", fg="yellow"))
+        return
+    try:
+        path.write_text(season_svg(summaries, left_out), encoding="utf-8")
+    except OSError as error:
+        raise click.ClickException(f"Couldn't save the season chart: {error}") from error
+    click.echo(f"  Season chart saved to {click.style(str(path), bold=True)}")
