@@ -82,7 +82,7 @@ def _format_on_low(battery: PastBattery) -> str:
     help="Also save the season chart as an SVG file.",
 )
 def battery_history_command(svg_path: Path | None):
-    """Show every replaced battery and low warning, with averages."""
+    """Show every replaced battery and low warning, with averages by device, make and season."""
     history = load_battery_history()
     lifespans = [
         (serial, battery)
@@ -269,6 +269,7 @@ def _print_season_averages(all_batteries: list[PastBattery]) -> None:
     summaries, left_out = season_summaries(all_batteries)
     longest = longest_average(summaries)
     if longest is None:
+        _print_empty_season_chart(left_out)
         return
 
     header = f"  {'Season':<6}   {'Average days to first low':<{BAR_WIDTH}}  {'':>8}"
@@ -277,6 +278,17 @@ def _print_season_averages(all_batteries: list[PastBattery]) -> None:
         click.echo(f"  {cell(summary.season, 6, **ZONE_STYLE)}   {_season_bar(summary, longest)}")
     if needs_hint(summaries):
         click.echo(click.style(f"  {HINT}", fg="yellow"))
+    if left_out:
+        click.echo(click.style(f"  {left_out_note(left_out)}", dim=True))
+    click.echo()
+
+
+def _print_empty_season_chart(left_out: int) -> None:
+    """The season heading and why it has no bars yet, so the chart isn't silently missing."""
+    click.echo(click.style("  Average by season fitted", **SECTION_STYLE))
+    click.echo(
+        click.style("  none yet, no set fitted since tracking began has been measured", dim=True)
+    )
     if left_out:
         click.echo(click.style(f"  {left_out_note(left_out)}", dim=True))
     click.echo()
