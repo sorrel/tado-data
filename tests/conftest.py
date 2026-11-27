@@ -27,12 +27,19 @@ class FrozenDate(date):
 
 @pytest.fixture
 def frozen_today(monkeypatch):
-    """Pin date.today() in both modules that call it."""
-    import commands.battery as battery_mod
-    import core.storage as storage_mod
+    """Pin date.today() in every module that calls it."""
+    import commands.battery
+    import commands.battery_history
+    import commands.battery_record
+    import core.storage
 
-    monkeypatch.setattr(storage_mod, "date", FrozenDate)
-    monkeypatch.setattr(battery_mod, "date", FrozenDate)
+    for module in (
+        core.storage,
+        commands.battery,
+        commands.battery_history,
+        commands.battery_record,
+    ):
+        monkeypatch.setattr(module, "date", FrozenDate)
     return TODAY
 
 

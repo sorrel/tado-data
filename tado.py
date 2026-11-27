@@ -5,9 +5,9 @@ Report on Tado smart heating system status.
 
 import click
 
-from commands.battery import (
-    battery_command,
-    battery_history_command,
+from commands.battery import battery_command
+from commands.battery_history import battery_history_command
+from commands.battery_record import (
     battery_make_command,
     battery_reading_command,
     battery_replaced_command,

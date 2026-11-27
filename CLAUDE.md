@@ -155,7 +155,16 @@ battery check leaves `battery_checked` alone, so a later run that day retries.
 - `core/client.py` — TadoClient class for API requests
 - `commands/setup.py` — auth, logout, status commands + ColouredGroup
 - `core/spacing.py` — the blank line before and after every command's output (terminal only); `ColouredGroup.main` wraps each run in it, so commands needn't add their own
-- `commands/battery.py` — Battery reporting command
+- `commands/battery.py` — the `battery` report
+- `commands/battery_history.py` — the `battery-history` report, its averages, season chart and `--svg`
+- `commands/battery_record.py` — `battery-replaced`, `battery-make` and `battery-reading`
+- `commands/battery_format.py` — age colours, lifespans and averages shared by the battery commands
+- `commands/device_lookup.py` — a serial or rough room name to a device, and tab completion (never contacts Tado)
+- `commands/table.py` — table cells, section titles, headers and rules shared by every report
+- `core/battery_devices.py` — Tado's device list as typed `BatteryDevice`s, and saving their states; shared by `battery` and the scheduled check
+- `core/storage.py` — the battery history and its `TypedDict`s
+- `core/jsonfile.py` — reading and atomically saving the JSON files in `stored_data/`; a damaged file raises `DamagedFile`
+- `core/paths.py` — where `tokens.json` and `stored_data/` live
 - `commands/heat_check.py` — heat-check command and its scheduled run
 - `core/heat_detect.py` — finds warming and offline faults in a day report (pure)
 - `core/heat_alerts.py` — decides which faults to notify: new, weekly, cleared (pure)
@@ -166,7 +175,7 @@ battery check leaves `battery_checked` alone, so a later run that day retries.
 - `tools/heat-check.plist.template`, `tools/install-heat-check.sh` — the 07:00 launchd schedule
 - `tests/fixtures/dayreport_fault.json` — the real 10 November 2026 loo report, weather removed
 - `tokens.json` — Saved auth tokens (gitignored)
-- `tests/` — pytest suite (pure logic only; never hits the API)
+- `tests/` — pytest suite (pure logic only; never hits the API); `tests/battery_helpers.py` has the fake clients, and `fake_tado` swaps one in for every battery command
 
 ## Code Style
 

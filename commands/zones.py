@@ -4,6 +4,7 @@ Zones command — shows which devices are zone controllers vs TRVs.
 
 import click
 
+from commands.table import count, echo_header
 from core.client import TadoClient
 
 
@@ -57,8 +58,7 @@ def zones_command():
         f"{'Fires Boiler':>12}"
     )
     click.echo()
-    click.echo(click.style(header, fg="bright_white", bold=True))
-    click.echo(click.style("  " + "─" * (len(header) - 2), fg="bright_black"))
+    echo_header(header)
 
     for r in rows:
         if r["fires_boiler"]:
@@ -76,8 +76,6 @@ def zones_command():
     controller_count = sum(1 for r in rows if r["fires_boiler"])
     total = len(rows)
     click.echo()
-    click.echo(
-        f"  {total} device{'s' if total != 1 else ''}, "
-        f"{controller_count} fire{'s' if controller_count == 1 else ''} boiler"
-    )
+    fire = "fires" if controller_count == 1 else "fire"
+    click.echo(f"  {count(total, 'device')}, {controller_count} {fire} boiler")
     click.echo()

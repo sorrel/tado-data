@@ -15,9 +15,14 @@ from datetime import date, datetime, timedelta
 
 import click
 
-from commands.battery import battery_rows, device_rooms, record_battery_states
 from core.auth import AuthError, AuthNetworkError, LoginNeeded, TokenLockBusy
 from core.battery_alerts import battery_changes
+from core.battery_devices import (
+    BatteryDevice,
+    battery_devices,
+    device_rooms,
+    record_battery_states,
+)
 from core.client import RateLimited, TadoAPIError, TadoClient
 from core.heat_alerts import update_faults
 from core.heat_detect import LONDON, Finding, Offline, Warming, find_problems
@@ -178,21 +183,22 @@ def _check_days(client, days: list[date], zones: list[dict], state: dict, lines:
     return state
 
 
-def _device_label(row: dict) -> str:
-    kind = "valve" if row["type"].startswith("VA") else "thermostat"
-    return f"{row['zone']} {kind}"
+def _device_label(device: BatteryDevice) -> str:
+    kind = "valve" if device.type.startswith("VA") else "thermostat"
+    return f"{device.zone} {kind}"
 
 
 def _check_batteries(client, zones: list[dict]) -> list[str]:
     """Save today's battery states to the history; the changes to notify."""
-    rows = battery_rows(client.get_devices(strict=True) or [], device_rooms(zones), None)
+    devices = battery_devices(client.get_devices(strict=True) or [], device_rooms(zones))
     before = load_battery_history()
-    after = record_battery_states(rows)
-    for row in rows:
-        if not row["mains"]:
-            online = "online" if row["connection"] else "offline"
-            _log(f"Battery: {_device_label(row)} {row['serial']} {row['battery']}, {online}")
-    changes = battery_changes(before, after, {row["serial"]: _device_label(row) for row in rows})
+    after = record_battery_states(devices)
+    for device in devices:
+        if not device.mains:
+            online = "online" if device.connected else "offline"
+            _log(f"Battery: {_device_label(device)} {device.serial} {device.battery}, {online}")
+    labels = {device.serial: _device_label(device) for device in devices}
+    changes = battery_changes(before, after, labels)
     if not changes:
         _log("Batteries: no change")
     return changes
