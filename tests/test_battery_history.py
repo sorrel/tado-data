@@ -378,14 +378,17 @@ def _season_section(output):
     return rows
 
 
-def test_season_chart_is_left_out_with_no_measured_sets(frozen_today, history_file, monkeypatch):
+def test_season_chart_says_none_yet_with_no_measured_sets(frozen_today, history_file, monkeypatch):
     _seed_history(history_file, [_past("2026-04-17", 209, minimum=True)])
     fake_tado(monkeypatch, FakeReportClient)
 
     result = CliRunner().invoke(battery_history_command)
 
     assert result.exit_code == 0
-    assert "Average by season fitted" not in result.output
+    assert "Average by season fitted" in result.output
+    assert "none yet" in result.output
+    assert "1 set not counted" in result.output
+    assert "█" not in result.output
 
 
 def test_season_chart_shows_every_season_and_lines_up(frozen_today, history_file, monkeypatch):
