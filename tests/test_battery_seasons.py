@@ -1,6 +1,12 @@
 """Tests for grouping battery lifespans by the season they were fitted, and drawing bars."""
 
-from core.battery_seasons import bar, season_of, season_summaries
+import xml.etree.ElementTree as ET
+
+import pytest
+
+from core.battery_seasons import AGE_HEX, age_band, bar, season_of, season_summaries, season_svg
+
+SVG = "{http://www.w3.org/2000/svg}"
 
 
 def measured(fitted, days):
@@ -97,3 +103,48 @@ def test_bar_never_vanishes_for_a_short_average():
 
 def test_bar_follows_the_width_given():
     assert bar(10, 10, width=8) == "█" * 8
+
+
+# --- age_band ---------------------------------------------------------------
+
+
+def test_age_band_changes_every_hundred_days():
+    assert [age_band(d) for d in (0, 99, 100, 250, 400, 900)] == [0, 0, 1, 2, 4, 4]
+
+
+# --- season_svg -------------------------------------------------------------
+
+
+def _bars(svg):
+    root = ET.fromstring(svg)
+    return [r for r in root.iter(f"{SVG}rect") if r.get("class") == "bar"]
+
+
+def test_svg_is_well_formed_with_a_bar_per_measured_season():
+    summaries, left_out = season_summaries(
+        [measured("2027-10-01", 150), measured("2027-11-20", 170), measured("2027-07-01", 230)]
+    )
+    bars = _bars(season_svg(summaries, left_out))
+    assert len(bars) == 2
+    widths = sorted(float(b.get("width")) for b in bars)
+    assert widths[0] / widths[1] == pytest.approx(160 / 230, rel=0.01)
+    assert {b.get("fill") for b in bars} == {AGE_HEX[1], AGE_HEX[2]}
+
+
+def test_svg_lists_every_season_and_the_figures():
+    svg = season_svg(*season_summaries([measured("2027-10-01", 150), measured("2027-11-20", 170)]))
+    for text in ("Spring", "Summer", "Autumn", "Winter", "160d ×2", "150–170d", "none yet"):
+        assert text in svg
+    assert "read it as a hint" in svg
+
+
+def test_svg_says_what_it_left_out():
+    svg = season_svg(
+        *season_summaries([measured("2027-10-01", 150), unknown_age("2026-04-17", 209)])
+    )
+    assert "1 set not counted" in svg
+
+
+def test_svg_has_a_viewbox_so_it_scales():
+    svg = season_svg(*season_summaries([measured("2027-10-01", 150)]))
+    assert ET.fromstring(svg).get("viewBox", "").startswith("0 0 ")

@@ -1255,3 +1255,30 @@ def test_season_chart_drops_the_hint_with_three_sets_everywhere(
 
     assert "Average by season fitted" in result.output
     assert "read it as a hint" not in result.output
+
+
+def test_history_svg_writes_the_file(frozen_today, history_file, monkeypatch, tmp_path):
+    _seed_history(history_file, [_past("2027-10-01", 150)])
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+    target = tmp_path / "seasons.svg"
+
+    result = CliRunner().invoke(battery_mod.battery_history_command, ["--svg", str(target)])
+
+    assert result.exit_code == 0
+    assert target.read_text(encoding="utf-8").startswith("<svg")
+    assert "Season chart saved to" in result.output and "seasons.svg" in result.output
+
+
+def test_history_svg_writes_nothing_without_a_measured_set(
+    frozen_today, history_file, monkeypatch, tmp_path
+):
+    _seed_history(history_file, [_past("2026-04-17", 209, minimum=True)])
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+    target = tmp_path / "seasons.svg"
+
+    result = CliRunner().invoke(battery_mod.battery_history_command, ["--svg", str(target)])
+
+    assert result.exit_code == 0
+    assert not target.exists()
+    assert "no measured sets" in result.output.lower()
+    assert "Replaced batteries" in result.output

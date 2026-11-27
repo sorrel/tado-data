@@ -21,7 +21,7 @@ uv run python tado.py <command>
 # Examples
 uv run python tado.py auth        # Authenticate (opens browser)
 uv run python tado.py battery     # Battery status report
-uv run python tado.py battery-history  # Every replaced battery and the average lifespan
+uv run python tado.py battery-history [--svg FILE]  # Every replaced battery, the average lifespan, and by season (--svg saves that chart)
 uv run python tado.py battery-replaced DEVICE [--make TEXT] [--old-make TEXT]  # Record that you replaced a device's batteries (serial or rough room name); asks the makes
 uv run python tado.py battery-make DEVICE MAKE [--old-set]  # Record or correct the make of the fitted (or last removed) batteries
 uv run python tado.py battery-reading DEVICE 30 40 [--date YYYY-MM-DD] [--note TEXT] [--old-set]  # Record a battery meter reading, one % per cell
@@ -67,7 +67,7 @@ OAuth2 Device Code Grant flow (required by Tado since March 2025):
 - `stored_data/` is local only and cannot be rebuilt from Tado, so saves are atomic and each one keeps the previous version as `battery_history.json.bak`. A damaged file stops the command with an error; it must never be treated as empty, or the next save would overwrite the real history
 - `battery-reading` keeps what a battery meter said, one percentage per cell, in `meter_readings` (`date`, `percent`, optional `note`). Like `low_periods`, it belongs to the batteries now fitted: every save must carry it across, and `battery-replaced` moves it into that battery's record in `past_batteries`. `--old-set` puts a reading on the set most recently taken out instead (dated the day they came out unless `--date` is given), for a reading not recorded before `battery-replaced`. `battery-history` lists every reading, with a **Batteries** column saying whether that set is `still in` or when it came `out`, because a note is written at the time and can go stale (the hall's "left in for now" did)
 - Every cell is AA, so only the **make** is recorded (`make`, optional). `battery-replaced` asks for the make of the new set and, only if it wasn't recorded, of the set taken out; Enter skips either, and `--make` / `--old-make` answer without asking. The fitted set's `make` moves into its `past_batteries` record on replacement, and like `meter_readings` every save must carry it across. A make typed in a different case from one already recorded takes the recorded spelling, so one make isn't counted twice. `battery-make` records or corrects one afterwards (`--old-set` for the set last taken out). `battery` shows the make of the batteries now fitted as its last column (**Make**, blank until one is recorded). `battery-history` shows each set's make and an **Average by make**. Makes began on 14 November 2026; earlier sets have none
-- `battery-history` ends with **Average by season fitted**: one bar per meteorological season (Spring Mar–May, Summer Jun–Aug, Autumn Sep–Nov, Winter Dec–Feb) of the date each set was fitted, because a set that goes in for the winter works far harder than one that goes in for the summer. Only measured sets count, as for the other averages; the rest are counted in a dim line, and a yellow hint shows while any season has fewer than 3 sets. Grouping and bars are in `core/battery_seasons.py` (design: `docs/superpowers/specs/2026-11-27-season-chart-design.md`)
+- `battery-history` ends with **Average by season fitted**: one bar per meteorological season (Spring Mar–May, Summer Jun–Aug, Autumn Sep–Nov, Winter Dec–Feb) of the date each set was fitted, because a set that goes in for the winter works far harder than one that goes in for the summer. Only measured sets count, as for the other averages; the rest are counted in a dim line, and a yellow hint shows while any season has fewer than 3 sets. `--svg FILE` also saves the chart as a self-contained SVG on a dark card, in the same colours (`age_band` sets the colour for both); with no measured set it writes nothing and says so. Grouping, bars and the SVG are in `core/battery_seasons.py` (design: `docs/superpowers/specs/2026-11-27-season-chart-design.md`)
 - A LOW device that goes offline is taken to have died: the first date seen is kept as `died`, and cleared if the device comes back online. `battery-history` shows days on low, as a minimum if the battery was replaced before dying
 
 ### Known Issue: Tado's LOW Warning Is Not the End of the Battery
@@ -159,6 +159,7 @@ battery check leaves `battery_checked` alone, so a later run that day retries.
 - `commands/heat_check.py` — heat-check command and its scheduled run
 - `core/heat_detect.py` — finds warming and offline faults in a day report (pure)
 - `core/heat_alerts.py` — decides which faults to notify: new, weekly, cleared (pure)
+- `core/battery_seasons.py` — battery life by season fitted: grouping, terminal bars and the SVG (pure)
 - `core/battery_alerts.py` — decides which battery changes the scheduled run notifies (pure)
 - `core/heat_store.py` — saved day reports and heat-check state in `stored_data/`
 - `core/notify.py` — macOS notifications through `osascript`
