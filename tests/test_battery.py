@@ -1282,3 +1282,17 @@ def test_history_svg_writes_nothing_without_a_measured_set(
     assert not target.exists()
     assert "no measured sets" in result.output.lower()
     assert "Replaced batteries" in result.output
+
+
+def test_history_svg_reports_a_path_it_cannot_write(
+    frozen_today, history_file, monkeypatch, tmp_path
+):
+    _seed_history(history_file, [_past("2027-10-01", 150)])
+    monkeypatch.setattr(battery_mod, "TadoClient", FakeReportClient)
+    target = tmp_path / "no-such-folder" / "seasons.svg"
+
+    result = CliRunner().invoke(battery_mod.battery_history_command, ["--svg", str(target)])
+
+    assert result.exit_code == 1
+    assert "Couldn't save the season chart" in result.output
+    assert not isinstance(result.exception, OSError)

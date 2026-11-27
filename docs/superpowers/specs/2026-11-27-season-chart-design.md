@@ -1,7 +1,7 @@
 # Battery life by season: design
 
-27 November 2026. To be built once a full year of measured sets exists
-(probably late 2027). Nothing in it needs new data saved before then.
+27 November 2026. Built straight away; its figures mean little until each
+season has measured sets (probably late 2027). It needs no new data saved.
 
 ## Why
 

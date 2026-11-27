@@ -925,5 +925,8 @@ def _save_season_svg(all_batteries: list[PastBattery], path: Path) -> None:
     if longest_average(summaries) is None:
         click.echo(click.style("  No measured sets yet, so no season chart to save.", fg="yellow"))
         return
-    path.write_text(season_svg(summaries, left_out), encoding="utf-8")
+    try:
+        path.write_text(season_svg(summaries, left_out), encoding="utf-8")
+    except OSError as error:
+        raise click.ClickException(f"Couldn't save the season chart: {error}") from error
     click.echo(f"  Season chart saved to {click.style(str(path), bold=True)}")
